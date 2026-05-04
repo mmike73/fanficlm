@@ -15,7 +15,7 @@ class LMClient:
         }
 
         async with httpx.AsyncClient() as client:
-            response = await client.post(f"{self.base_url}/chat/completions")
+            response = await client.post(f"{self.base_url}/chat/completions", json=payload, timeout=app_settings.TIMEOUT)
             response.raise_for_status()
 
             data = response.json()
