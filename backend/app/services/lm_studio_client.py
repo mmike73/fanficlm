@@ -1,10 +1,10 @@
 import httpx
-from core.config import app_settings
+from app.core.config import app_settings
 
 class LMClient:
-    def __init___(self):
-        self.base_url = app_settings.BASE_URL
-        self.model = app_settings.MODEL
+    def __init__(self):
+        self.base_url = app_settings.LM_STUDIO_BASE_URL
+        self.model = app_settings.LM_STUDIO_MODEL
         self.temperature = app_settings.TEMPERATURE
 
     async def chat_completion(self, messages: list[dict]):

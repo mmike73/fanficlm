@@ -1,10 +1,15 @@
+from pathlib import Path
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
-    BASE_URL: str
-    MODEL: str
-    TEMPERATURE: float
+    LM_STUDIO_BASE_URL: str
+    LM_STUDIO_MODEL: str
+    TEMPERATURE: float = 0.7
+    TIMEOUT: int = 120
 
-    model_config = SettingsConfigDict(env_file='.env', env_config='utf-8')
+    model_config = SettingsConfigDict(
+        env_file=Path(__file__).resolve().parent.parent.parent / '.env',
+        env_file_encoding='utf-8'
+    )
 
 app_settings = Settings()
