@@ -94,3 +94,128 @@ Both automated metrics and human evaluation are considered.
 - Backend: Node.js or Python
 - Models: Fine-tuned Smaller Language Models
 - Data processing: scraping and ingestion pipelines
+
+
+
+# FanficLM
+
+A local LLM chat platform built with FastAPI and React, powered by a fine-tuned model served via LM Studio.
+
+---
+
+## Prerequisites
+
+- Python 3.11+
+- Node.js 18+
+- [LM Studio](https://lmstudio.ai) installed on your machine
+
+---
+
+## 1. Set up LM Studio
+
+1. Download and install [LM Studio](https://lmstudio.ai).
+2. Open LM Studio and search for your model (e.g. `google/gemma-4-e4b`).
+3. Download the model.
+4. Go to the **Local Server** tab (the `↔` icon on the left sidebar).
+5. Select your model from the dropdown and click **Start Server**.
+6. The server runs on `http://127.0.0.1:1234` by default.
+
+---
+
+## 2. Configure the backend
+
+Copy the example env file and fill in your values:
+
+```bash
+cd backend
+cp .env.example .env
+```
+
+Edit `.env`:
+
+```
+LM_STUDIO_BASE_URL=http://127.0.0.1:1234/v1
+LM_STUDIO_MODEL=google/gemma-4-e4b
+TEMPERATURE=0.7
+TIMEOUT=120
+```
+
+Make sure `LM_STUDIO_MODEL` matches exactly the model identifier shown in LM Studio's local server tab.
+
+---
+
+## 3. Run the backend
+
+From the `backend/` directory:
+
+```bash
+# Create and activate a virtual environment
+python -m venv venv
+
+# Windows
+venv\Scripts\activate
+
+# macOS / Linux
+source venv/bin/activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Start the server
+uvicorn app.main:app --reload
+```
+
+The API will be available at `http://127.0.0.1:8000`.
+Swagger UI at `http://127.0.0.1:8000/docs`.
+
+---
+
+## 4. Run the frontend
+
+From the `frontend/` directory:
+
+```bash
+npm install
+npm run dev
+```
+
+The app will be available at `http://localhost:5173`.
+
+---
+
+## System prompt
+
+The default system prompt is located at:
+
+```
+backend/prompts/system_default.txt
+```
+
+Edit it freely to change the assistant's behaviour. Restart the backend after any changes.
+
+---
+
+## Project structure
+
+```
+fanficlm/
+├── backend/
+│   ├── app/
+│   │   ├── api/v1/endpoints/   # route handlers
+│   │   ├── core/               # config, logging
+│   │   ├── schemas/            # Pydantic models
+│   │   └── services/           # LM Studio client, future services
+│   ├── prompts/                # system prompt .txt files
+│   ├── data/                   # raw, processed datasets
+│   ├── vector_store/           # ChromaDB persistent store
+│   ├── feedback_store/         # RLHF feedback records
+│   ├── reports/                # evaluation outputs
+│   ├── .env
+│   ├── .env.example
+│   └── requirements.txt
+└── frontend/
+    └── src/
+        ├── App.jsx
+        ├── main.jsx
+        └── index.css
+```
