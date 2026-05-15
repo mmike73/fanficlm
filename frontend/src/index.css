@@ -2,13 +2,94 @@
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+/* ── theme variables (default = original dark) ── */
+:root {
+  --bg:              #0d0d0d;
+  --fg:              #e8e8e8;
+  --fg-muted:        #d4d4d4;
+  --fg-dim:          #555;
+  --user-bubble-bg:  #1e1e1e;
+  --user-bubble-br:  #2a2a2a;
+  --input-bg:        #141414;
+  --input-br:        #252525;
+  --accent-1:        #6366f1;
+  --accent-2:        #a855f7;
+  --accent-glow:     rgba(99,102,241,0.08);
+  --scroll:          #2a2a2a;
+}
+
+[data-theme="love"] {
+  --bg: #2a0d1a; --fg: #ffe4ee; --fg-muted: #ffd1e1; --fg-dim: #c08aa0;
+  --user-bubble-bg: #471227; --user-bubble-br: #5e1a35;
+  --input-bg: #3a0f20; --input-br: #5a1a35;
+  --accent-1: #ff4d8d; --accent-2: #ff8fb1; --accent-glow: rgba(255,77,141,0.15);
+  --scroll: #5a1a35;
+}
+
+[data-theme="sadness"] {
+  --bg: #0e1726; --fg: #d6e1ee; --fg-muted: #b8c5d6; --fg-dim: #5a6b80;
+  --user-bubble-bg: #1a2438; --user-bubble-br: #28344d;
+  --input-bg: #131c2c; --input-br: #28344d;
+  --accent-1: #4a7bb8; --accent-2: #6fa8d6; --accent-glow: rgba(74,123,184,0.12);
+  --scroll: #28344d;
+}
+
+[data-theme="anime"] {
+  --bg: #1a0f2e; --fg: #f5e6ff; --fg-muted: #e0c8ff; --fg-dim: #8a6db5;
+  --user-bubble-bg: #2e1a4d; --user-bubble-br: #4a2670;
+  --input-bg: #221340; --input-br: #4a2670;
+  --accent-1: #ff6fcf; --accent-2: #66e0ff; --accent-glow: rgba(255,111,207,0.15);
+  --scroll: #4a2670;
+}
+
+[data-theme="history"] {
+  --bg: #1f1810; --fg: #f0e3cc; --fg-muted: #d6c4a3; --fg-dim: #7a6b50;
+  --user-bubble-bg: #322618; --user-bubble-br: #4a3924;
+  --input-bg: #261d12; --input-br: #4a3924;
+  --accent-1: #b8884a; --accent-2: #e0b070; --accent-glow: rgba(184,136,74,0.15);
+  --scroll: #4a3924;
+}
+
+[data-theme="war"] {
+  --bg: #1a1c14; --fg: #d8dcc8; --fg-muted: #b8bda5; --fg-dim: #6b6f55;
+  --user-bubble-bg: #28291c; --user-bubble-br: #3d3f2a;
+  --input-bg: #1f2117; --input-br: #3d3f2a;
+  --accent-1: #6b7f3a; --accent-2: #9bb058; --accent-glow: rgba(107,127,58,0.15);
+  --scroll: #3d3f2a;
+}
+
+[data-theme="cozy"] {
+  --bg: #2a1f17; --fg: #f5e8d8; --fg-muted: #e0cdb3; --fg-dim: #8a7560;
+  --user-bubble-bg: #3d2d20; --user-bubble-br: #54402f;
+  --input-bg: #322519; --input-br: #54402f;
+  --accent-1: #e09f5b; --accent-2: #f5c08a; --accent-glow: rgba(224,159,91,0.18);
+  --scroll: #54402f;
+}
+
+[data-theme="royal"] {
+  --bg: #15102e; --fg: #ecdcff; --fg-muted: #cfb8ee; --fg-dim: #6b5a99;
+  --user-bubble-bg: #251a4d; --user-bubble-br: #3a2870;
+  --input-bg: #1c1438; --input-br: #3a2870;
+  --accent-1: #b88a2e; --accent-2: #e0b85a; --accent-glow: rgba(184,138,46,0.18);
+  --scroll: #3a2870;
+}
+
+[data-theme="mafia"] {
+  --bg: #0a0a0a; --fg: #e8e0cc; --fg-muted: #c8c0a8; --fg-dim: #5a5040;
+  --user-bubble-bg: #1a1612; --user-bubble-br: #2a2418;
+  --input-bg: #14110c; --input-br: #2a2418;
+  --accent-1: #8a1818; --accent-2: #c43030; --accent-glow: rgba(138,24,24,0.18);
+  --scroll: #2a2418;
+}
+
 body {
   font-family: 'Inter', system-ui, sans-serif;
-  background: #0d0d0d;
-  color: #e8e8e8;
+  background: var(--bg);
+  color: var(--fg);
   height: 100dvh;
   display: flex;
   justify-content: center;
+  transition: background-color 0.5s ease, color 0.5s ease;
 }
 
 #root {
@@ -17,6 +98,36 @@ body {
   width: 100%;
   max-width: 760px;
   height: 100dvh;
+  position: relative;
+}
+
+/* ── theme badge ── */
+.theme-badge {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--fg-muted);
+  background: var(--user-bubble-bg);
+  border: 1px solid var(--user-bubble-br);
+  border-radius: 999px;
+  text-transform: capitalize;
+  letter-spacing: 0.3px;
+  user-select: none;
+  z-index: 10;
+  transition: background-color 0.5s ease, border-color 0.5s ease, color 0.5s ease;
+}
+
+.theme-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent-1), var(--accent-2));
 }
 
 /* ── empty state ── */
@@ -34,7 +145,7 @@ body {
   width: 48px;
   height: 48px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #6366f1, #a855f7);
+  background: linear-gradient(135deg, var(--accent-1), var(--accent-2));
   display: flex;
   align-items: center;
   justify-content: center;
@@ -45,12 +156,12 @@ body {
   font-size: 24px;
   font-weight: 500;
   letter-spacing: -0.4px;
-  color: #e8e8e8;
+  color: var(--fg);
 }
 
 .empty-state p {
   font-size: 14px;
-  color: #555;
+  color: var(--fg-dim);
 }
 
 /* ── messages ── */
@@ -62,7 +173,7 @@ body {
   flex-direction: column;
   gap: 28px;
   scrollbar-width: thin;
-  scrollbar-color: #2a2a2a transparent;
+  scrollbar-color: var(--scroll) transparent;
 }
 
 .message { display: flex; flex-direction: column; gap: 6px; }
@@ -75,7 +186,7 @@ body {
   align-items: center;
   gap: 7px;
   font-size: 12px;
-  color: #555;
+  color: var(--fg-dim);
   padding: 0 2px;
 }
 
@@ -91,12 +202,12 @@ body {
 }
 
 .avatar.assistant {
-  background: linear-gradient(135deg, #6366f1, #a855f7);
+  background: linear-gradient(135deg, var(--accent-1), var(--accent-2));
 }
 
 .avatar.user {
-  background: #2a2a2a;
-  border: 1px solid #333;
+  background: var(--user-bubble-bg);
+  border: 1px solid var(--user-bubble-br);
 }
 
 .bubble {
@@ -104,21 +215,22 @@ body {
   line-height: 1.7;
   white-space: pre-wrap;
   word-break: break-word;
+  transition: background-color 0.5s ease, border-color 0.5s ease, color 0.5s ease;
 }
 
 .message.user .bubble {
-  background: #1e1e1e;
-  border: 1px solid #2a2a2a;
+  background: var(--user-bubble-bg);
+  border: 1px solid var(--user-bubble-br);
   border-radius: 18px 18px 4px 18px;
   padding: 11px 16px;
   max-width: 78%;
-  color: #e8e8e8;
+  color: var(--fg);
 }
 
 .message.assistant .bubble {
   background: transparent;
   max-width: 88%;
-  color: #d4d4d4;
+  color: var(--fg-muted);
   padding: 2px 0;
 }
 
@@ -143,7 +255,7 @@ body {
 .typing span {
   width: 6px;
   height: 6px;
-  background: #6366f1;
+  background: var(--accent-1);
   border-radius: 50%;
   animation: bounce 1.3s infinite ease-in-out;
   opacity: 0.6;
@@ -166,16 +278,16 @@ body {
   display: flex;
   align-items: flex-end;
   gap: 10px;
-  background: #141414;
-  border: 1px solid #252525;
+  background: var(--input-bg);
+  border: 1px solid var(--input-br);
   border-radius: 20px;
   padding: 12px 12px 12px 18px;
-  transition: border-color 0.2s;
+  transition: border-color 0.2s, background-color 0.5s ease;
 }
 
 .input-box:focus-within {
-  border-color: #6366f1;
-  box-shadow: 0 0 0 3px rgba(99,102,241,0.08);
+  border-color: var(--accent-1);
+  box-shadow: 0 0 0 3px var(--accent-glow);
 }
 
 textarea {
@@ -183,7 +295,7 @@ textarea {
   background: transparent;
   border: none;
   outline: none;
-  color: #e8e8e8;
+  color: var(--fg);
   font-size: 15px;
   font-family: inherit;
   resize: none;
@@ -192,13 +304,13 @@ textarea {
   line-height: 1.6;
   padding: 2px 0;
   scrollbar-width: thin;
-  scrollbar-color: #333 transparent;
+  scrollbar-color: var(--scroll) transparent;
 }
 
-textarea::placeholder { color: #3a3a3a; }
+textarea::placeholder { color: var(--fg-dim); opacity: 0.6; }
 
 .send-btn {
-  background: linear-gradient(135deg, #6366f1, #a855f7);
+  background: linear-gradient(135deg, var(--accent-1), var(--accent-2));
   border: none;
   border-radius: 10px;
   width: 34px;
@@ -224,7 +336,8 @@ textarea::placeholder { color: #3a3a3a; }
 .hint {
   text-align: center;
   font-size: 11px;
-  color: #333;
+  color: var(--fg-dim);
+  opacity: 0.6;
   margin-top: 10px;
   user-select: none;
 }

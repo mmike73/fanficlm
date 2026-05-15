@@ -10,6 +10,7 @@ class LMClient:
         self.base_url = app_settings.LM_STUDIO_BASE_URL
         self.model = app_settings.LM_STUDIO_MODEL
         self.temperature = app_settings.TEMPERATURE
+        self.timeout = app_settings.TIMEOUT
         self.system_prompt = _load_system_prompt('system_default.txt')
 
     async def chat_completion(self, messages: list[dict]) -> str:
@@ -18,11 +19,10 @@ class LMClient:
             "messages": [{"role": "system", "content": self.system_prompt}, *messages],
             "temperature": self.temperature,
         }
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
             response = await client.post(
                 f"{self.base_url}/chat/completions",
                 json=payload,
-                timeout=app_settings.TIMEOUT,
             )
             response.raise_for_status()
             data = response.json()

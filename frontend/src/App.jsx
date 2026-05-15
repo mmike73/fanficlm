@@ -3,6 +3,17 @@ import './index.css'
 
 const API = 'http://127.0.0.1:8000/api/v1'
 
+const THEME_LABELS = {
+  love:    'Love',
+  sadness: 'Sadness',
+  anime:   'Anime',
+  history: 'History',
+  war:     'War',
+  cozy:    'Cozy',
+  royal:   'Royal',
+  mafia:   'Mafia',
+}
+
 function Avatar({ role }) {
   return (
     <div className={`avatar ${role}`}>
@@ -15,8 +26,15 @@ export default function App() {
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
+  const [theme, setTheme] = useState('default')
   const bottomRef = useRef(null)
   const textareaRef = useRef(null)
+
+  // Apply the theme to the document root so CSS variables cascade
+  // through everything (background, bubbles, accents, etc.).
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme)
+  }, [theme])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -36,6 +54,23 @@ export default function App() {
     }
   }
 
+  // Fire-and-forget theme detection. We don't block the chat reply
+  // on it — the UI just re-skins itself once the classifier returns.
+  const detectTheme = async (text) => {
+    try {
+      const res = await fetch(`${API}/theme`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: text }),
+      })
+      if (!res.ok) return
+      const data = await res.json()
+      if (data?.theme) setTheme(data.theme)
+    } catch {
+      // Theme detection is non-critical — silently ignore failures.
+    }
+  }
+
   const submit = async () => {
     const text = input.trim()
     if (!text || loading) return
@@ -47,6 +82,9 @@ export default function App() {
     setInput('')
     setTimeout(adjustTextarea, 0)
     setLoading(true)
+
+    // Run theme detection in parallel with the chat call.
+    detectTheme(text)
 
     try {
       const res = await fetch(`${API}/chat`, {
@@ -69,6 +107,13 @@ export default function App() {
 
   return (
     <>
+      {theme !== 'default' && (
+        <div className="theme-badge">
+          <span className="theme-dot" />
+          {THEME_LABELS[theme] ?? theme}
+        </div>
+      )}
+
       {isEmpty ? (
         <div className="empty-state">
           <div className="empty-logo">✦</div>
