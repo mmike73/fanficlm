@@ -16,6 +16,12 @@
   --accent-2:        #a855f7;
   --accent-glow:     rgba(99,102,241,0.08);
   --scroll:          #2a2a2a;
+
+  /* Ambient background glow — color + position per theme. */
+  --glow-color:      transparent;
+  --glow-position:   50% 0%;
+  --glow-size:       50vmax;
+  --glow-strength:   0;
 }
 
 [data-theme="love"] {
@@ -24,6 +30,9 @@
   --input-bg: #3a0f20; --input-br: #5a1a35;
   --accent-1: #ff4d8d; --accent-2: #ff8fb1; --accent-glow: rgba(255,77,141,0.15);
   --scroll: #5a1a35;
+  --glow-color: rgba(255, 77, 141, 1);
+  --glow-position: 85% 15%;
+  --glow-strength: 0.14;
 }
 
 [data-theme="sadness"] {
@@ -32,6 +41,9 @@
   --input-bg: #131c2c; --input-br: #28344d;
   --accent-1: #4a7bb8; --accent-2: #6fa8d6; --accent-glow: rgba(74,123,184,0.12);
   --scroll: #28344d;
+  --glow-color: rgba(74, 123, 184, 1);
+  --glow-position: 50% 110%;
+  --glow-strength: 0.18;
 }
 
 [data-theme="anime"] {
@@ -40,6 +52,9 @@
   --input-bg: #221340; --input-br: #4a2670;
   --accent-1: #ff6fcf; --accent-2: #66e0ff; --accent-glow: rgba(255,111,207,0.15);
   --scroll: #4a2670;
+  --glow-color: rgba(255, 111, 207, 1);
+  --glow-position: 15% 20%;
+  --glow-strength: 0.16;
 }
 
 [data-theme="history"] {
@@ -48,6 +63,9 @@
   --input-bg: #261d12; --input-br: #4a3924;
   --accent-1: #b8884a; --accent-2: #e0b070; --accent-glow: rgba(184,136,74,0.15);
   --scroll: #4a3924;
+  --glow-color: rgba(224, 176, 112, 1);
+  --glow-position: 50% 0%;
+  --glow-strength: 0.13;
 }
 
 [data-theme="war"] {
@@ -56,6 +74,9 @@
   --input-bg: #1f2117; --input-br: #3d3f2a;
   --accent-1: #6b7f3a; --accent-2: #9bb058; --accent-glow: rgba(107,127,58,0.15);
   --scroll: #3d3f2a;
+  --glow-color: rgba(155, 176, 88, 1);
+  --glow-position: 100% 100%;
+  --glow-strength: 0.10;
 }
 
 [data-theme="cozy"] {
@@ -64,6 +85,9 @@
   --input-bg: #322519; --input-br: #54402f;
   --accent-1: #e09f5b; --accent-2: #f5c08a; --accent-glow: rgba(224,159,91,0.18);
   --scroll: #54402f;
+  --glow-color: rgba(245, 192, 138, 1);
+  --glow-position: 50% 100%;
+  --glow-strength: 0.18;
 }
 
 [data-theme="royal"] {
@@ -72,6 +96,9 @@
   --input-bg: #1c1438; --input-br: #3a2870;
   --accent-1: #b88a2e; --accent-2: #e0b85a; --accent-glow: rgba(184,138,46,0.18);
   --scroll: #3a2870;
+  --glow-color: rgba(224, 184, 90, 1);
+  --glow-position: 50% 0%;
+  --glow-strength: 0.16;
 }
 
 [data-theme="mafia"] {
@@ -80,6 +107,9 @@
   --input-bg: #14110c; --input-br: #2a2418;
   --accent-1: #8a1818; --accent-2: #c43030; --accent-glow: rgba(138,24,24,0.18);
   --scroll: #2a2418;
+  --glow-color: rgba(196, 48, 48, 1);
+  --glow-position: 15% 100%;
+  --glow-strength: 0.12;
 }
 
 body {
@@ -90,6 +120,28 @@ body {
   display: flex;
   justify-content: center;
   transition: background-color 0.5s ease, color 0.5s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+/* ── ambient mood glow ──
+   Sits behind every element on the page. Painted as a soft radial
+   gradient from --glow-color at --glow-position, fading to transparent.
+   Per-theme variables move the glow and tint it without touching the
+   rest of the layout. */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: -1;
+  background: radial-gradient(
+    circle var(--glow-size) at var(--glow-position),
+    var(--glow-color) 0%,
+    transparent 70%
+  );
+  opacity: var(--glow-strength);
+  transition: opacity 0.8s ease, background 0.8s ease;
 }
 
 #root {
@@ -150,6 +202,8 @@ body {
   align-items: center;
   justify-content: center;
   font-size: 22px;
+  color: #fff;
+  transition: background 0.5s ease;
 }
 
 .empty-state h1 {
@@ -199,10 +253,12 @@ body {
   justify-content: center;
   font-size: 11px;
   flex-shrink: 0;
+  color: #fff;
 }
 
 .avatar.assistant {
   background: linear-gradient(135deg, var(--accent-1), var(--accent-2));
+  transition: background 0.5s ease;
 }
 
 .avatar.user {
@@ -320,7 +376,7 @@ textarea::placeholder { color: var(--fg-dim); opacity: 0.6; }
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  transition: opacity 0.15s, transform 0.1s;
+  transition: opacity 0.15s, transform 0.1s, background 0.5s ease;
 }
 
 .send-btn:not(:disabled):hover { opacity: 0.85; transform: scale(1.04); }
