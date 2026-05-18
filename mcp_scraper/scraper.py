@@ -1,14 +1,5 @@
 """
-scraper.py — web scraping logic for Wikipedia and Fandom/Wikia.
-
-Pipeline per entity:
-  1. Try Fandom wiki first (best for fictional characters)
-  2. Fall back to Wikipedia REST API
-  3. Parse structured sections → EntityAttribute dict
-  4. Chunk attributes for vector storage
-
-The scraper is intentionally synchronous (uses httpx sync client) because
-it is called from within async MCP tool handlers via asyncio.to_thread().
+Intentionally synchronous — called via asyncio.to_thread() from the async MCP handlers.
 """
 
 import re
@@ -25,7 +16,6 @@ from .config import (
     HTTP_TIMEOUT_SECONDS,
     MAX_RAW_TEXT_CHARS,
     FANDOM_SEARCH_API,
-    FANDOM_SEARCH_URL,
     WIKIPEDIA_SUMMARY_URL,
     WIKIPEDIA_SEARCH_URL,
     SOURCE_PRIORITY,
@@ -34,8 +24,6 @@ from .models import Entity, ScrapeResult, Chunk
 
 logger = logging.getLogger(__name__)
 
-# ── Section keywords → attribute keys ─────────────────────────────────────
-# Maps lower-cased heading text fragments to our canonical attribute key.
 _SECTION_MAP = {
     "personality":    "personality",
     "character":      "personality",
@@ -59,14 +47,11 @@ _SECTION_MAP = {
     "notes":          "trivia",
 }
 
-# Headings to skip entirely
 _SKIP_SECTIONS = {
     "see also", "references", "external links", "navigation",
     "gallery", "videos", "merchandise", "quotes", "media",
     "cast", "crew", "navigation menu", "contents",
 }
-
-# ── HTTP client (shared, with rate-limit sleep) ────────────────────────────
 
 _HEADERS = {
     "User-Agent": (
@@ -77,7 +62,6 @@ _HEADERS = {
 
 
 def _get(url: str, params: Optional[dict] = None) -> Optional[httpx.Response]:
-    """GET with timeout, headers, and a polite delay."""
     time.sleep(REQUEST_DELAY_SECONDS)
     try:
         with httpx.Client(timeout=HTTP_TIMEOUT_SECONDS, headers=_HEADERS, follow_redirects=True) as client:
@@ -89,14 +73,9 @@ def _get(url: str, params: Optional[dict] = None) -> Optional[httpx.Response]:
         return None
 
 
-# ── Main entry point ───────────────────────────────────────────────────────
-
 def scrape_entity(name: str, fandom: str, entity_type: str = "character") -> ScrapeResult:
-    """
-    Try each source in SOURCE_PRIORITY and return the first success.
-    Falls back to a minimal Entity if all sources fail.
-    """
     entity = Entity(name=name, fandom=fandom, entity_type=entity_type)
+    last_error = "No source returned data"
 
     for source in SOURCE_PRIORITY:
         if source == "fandom":
@@ -109,21 +88,14 @@ def scrape_entity(name: str, fandom: str, entity_type: str = "character") -> Scr
         if result.success:
             logger.info(f"Scraped '{name}' ({fandom}) from {source}")
             return result
+        if result.error:
+            last_error = result.error
 
-    logger.warning(f"All sources failed for '{name}' ({fandom})")
-    return ScrapeResult(entity=entity, success=False, error="No source returned data")
+    logger.warning(f"All sources failed for '{name}' ({fandom}): {last_error}")
+    return ScrapeResult(entity=entity, success=False, error=last_error)
 
-
-# ── Fandom scraper ─────────────────────────────────────────────────────────
 
 def _scrape_fandom(entity: Entity) -> ScrapeResult:
-    """
-    Scrape a Fandom/Wikia wiki.
-    Strategy:
-      1. Hit the Fandom search API to find the best matching article URL.
-      2. Fetch the article HTML.
-      3. Parse infobox + section headings.
-    """
     fandom_slug = _fandom_slug(entity.fandom)
     search_url = FANDOM_SEARCH_API.format(fandom=fandom_slug, query=quote(entity.name))
 
@@ -159,21 +131,15 @@ def _scrape_fandom(entity: Entity) -> ScrapeResult:
 
 
 def _parse_fandom_html(html: str) -> dict:
-    """
-    Extract structured text from a Fandom wiki article.
-    Returns a dict of attribute_key → text.
-    """
     soup = BeautifulSoup(html, "lxml")
     attributes: dict[str, list[str]] = {}
 
-    # ── Infobox ──
     infobox = soup.find("aside", class_=re.compile(r"portable-infobox|infobox", re.I))
     if infobox:
         infobox_text = _clean_text(infobox.get_text(separator=" "))
         if infobox_text:
             attributes.setdefault("infobox", []).append(infobox_text)
 
-    # ── Lead paragraph (description) ──
     content_div = soup.find("div", class_=re.compile(r"mw-parser-output|page__main", re.I))
     if content_div:
         first_p = content_div.find("p")
@@ -182,13 +148,11 @@ def _parse_fandom_html(html: str) -> dict:
             if lead:
                 attributes["description"] = [lead]
 
-    # ── Section headings ──
     current_key = "backstory"
     current_text: list[str] = []
 
     for tag in (content_div or soup).find_all(["h2", "h3", "p", "ul", "ol"]):
         if tag.name in ("h2", "h3"):
-            # flush previous section
             if current_text:
                 attributes.setdefault(current_key, []).extend(current_text)
                 current_text = []
@@ -205,23 +169,23 @@ def _parse_fandom_html(html: str) -> dict:
     if current_text and current_key != "__skip__":
         attributes.setdefault(current_key, []).extend(current_text)
 
-    # ── Flatten lists → single strings ──
     return {k: "\n\n".join(v) for k, v in attributes.items() if v}
 
 
-# ── Wikipedia scraper ──────────────────────────────────────────────────────
-
 def _scrape_wikipedia(entity: Entity) -> ScrapeResult:
-    """
-    Use Wikipedia's REST summary API for a clean lead paragraph,
-    then fetch the full page HTML for sections.
-    """
-    # Step 1: search for the best matching title
-    title = _wikipedia_search(entity.name)
+    title = _wikipedia_search(entity.name, fandom=entity.fandom)
     if not title:
         return ScrapeResult(entity=entity, success=False, error="Wikipedia search returned nothing")
 
-    # Step 2: summary (fast, structured)
+    name_words = entity.name.lower().split()
+    title_lower = title.lower()
+    if entity.entity_type == "character" and not any(w in title_lower for w in name_words if len(w) > 3):
+        return ScrapeResult(
+            entity=entity,
+            success=False,
+            error=f"No dedicated Wikipedia article found for '{entity.name}' — best match was '{title}'. Try a Fandom wiki.",
+        )
+
     summary_url = WIKIPEDIA_SUMMARY_URL.format(title=quote(title, safe=""))
     resp = _get(summary_url)
     if resp is None:
@@ -239,11 +203,9 @@ def _scrape_wikipedia(entity: Entity) -> ScrapeResult:
     if description:
         attributes["description"] = description[:MAX_RAW_TEXT_CHARS]
 
-    # Step 3: full page HTML for sections
     page_html_resp = _get(f"https://en.wikipedia.org/wiki/{quote(title, safe='')}")
     if page_html_resp:
-        section_attrs = _parse_wikipedia_html(page_html_resp.text)
-        attributes.update(section_attrs)
+        attributes.update(_parse_wikipedia_html(page_html_resp.text))
 
     if not attributes:
         return ScrapeResult(entity=entity, success=False, error="Wikipedia returned no content")
@@ -255,30 +217,44 @@ def _scrape_wikipedia(entity: Entity) -> ScrapeResult:
     return ScrapeResult(entity=entity, attributes=attributes, success=True)
 
 
-def _wikipedia_search(query: str) -> Optional[str]:
-    """Search Wikipedia and return the title of the best hit."""
-    resp = _get(
-        WIKIPEDIA_SEARCH_URL,
-        params={
-            "action": "query",
-            "list": "search",
-            "srsearch": query,
-            "srlimit": 3,
-            "format": "json",
-            "utf8": 1,
-        },
-    )
-    if resp is None:
+def _wikipedia_search(query: str, fandom: str = "") -> Optional[str]:
+    def _search(q: str) -> list[dict]:
+        resp = _get(
+            WIKIPEDIA_SEARCH_URL,
+            params={
+                "action": "query",
+                "list": "search",
+                "srsearch": q,
+                "srlimit": 5,
+                "format": "json",
+                "utf8": 1,
+            },
+        )
+        if resp is None:
+            return []
+        try:
+            return resp.json()["query"]["search"]
+        except (KeyError, IndexError):
+            return []
+
+    name_lower = query.lower()
+
+    if fandom:
+        hits = _search(f"{query} {fandom} character")
+        for h in hits:
+            if name_lower in h["title"].lower():
+                return h["title"]
+
+    hits = _search(query)
+    if not hits:
         return None
-    try:
-        hits = resp.json()["query"]["search"]
-        return hits[0]["title"] if hits else None
-    except (KeyError, IndexError):
-        return None
+    for h in hits:
+        if name_lower in h["title"].lower():
+            return h["title"]
+    return hits[0]["title"]
 
 
 def _parse_wikipedia_html(html: str) -> dict:
-    """Parse Wikipedia article HTML into section attributes."""
     soup = BeautifulSoup(html, "lxml")
     content = soup.find("div", id="mw-content-text")
     if not content:
@@ -309,28 +285,17 @@ def _parse_wikipedia_html(html: str) -> dict:
     return {k: "\n\n".join(v)[:MAX_RAW_TEXT_CHARS] for k, v in attributes.items() if v}
 
 
-# ── Chunking ───────────────────────────────────────────────────────────────
-
 def make_chunks(entity: Entity, entity_id: int, attributes: dict) -> list[Chunk]:
-    """
-    Convert an entity's attributes into Chunk objects ready for ChromaDB.
-
-    Each attribute becomes one or more chunks (split if very long).
-    Chunk IDs are deterministic so upserts are idempotent.
-    """
     chunks = []
     slug = entity.canonical_name.replace("::", "_").replace(" ", "_")
 
     for attr_key, text in attributes.items():
         if not text or not text.strip():
             continue
-        # Split long attributes into ~800-char windows with 100-char overlap
-        segments = _split_text(text, max_chars=800, overlap=100)
-        for i, segment in enumerate(segments):
-            chunk_id = f"{slug}__{attr_key}__{i:03d}"
+        for i, segment in enumerate(_split_text(text, max_chars=800, overlap=100)):
             chunks.append(
                 Chunk(
-                    chunk_id=chunk_id,
+                    chunk_id=f"{slug}__{attr_key}__{i:03d}",
                     text=segment,
                     entity_name=entity.name,
                     fandom=entity.fandom,
@@ -339,13 +304,10 @@ def make_chunks(entity: Entity, entity_id: int, attributes: dict) -> list[Chunk]
                     entity_type=entity.entity_type,
                 )
             )
-
-    logger.debug(f"Created {len(chunks)} chunks for entity '{entity.name}'")
     return chunks
 
 
 def _split_text(text: str, max_chars: int = 800, overlap: int = 100) -> list[str]:
-    """Split text into overlapping windows at sentence or paragraph boundaries."""
     if len(text) <= max_chars:
         return [text]
 
@@ -356,59 +318,49 @@ def _split_text(text: str, max_chars: int = 800, overlap: int = 100) -> list[str
         if end >= len(text):
             segments.append(text[start:].strip())
             break
-        # Try to break at a sentence boundary
         boundary = text.rfind(". ", start, end)
         if boundary == -1 or boundary <= start:
             boundary = end
         else:
-            boundary += 1  # include the period
+            boundary += 1
         segments.append(text[start:boundary].strip())
         start = boundary - overlap
     return [s for s in segments if s]
 
 
-# ── Utilities ──────────────────────────────────────────────────────────────
-
 def _clean_text(text: str) -> str:
-    """Remove excessive whitespace and citation markers like [1]."""
     text = re.sub(r"\[\d+\]", "", text)
     text = re.sub(r"\s+", " ", text)
     return text.strip()
 
 
 def _map_section(heading: str) -> str:
-    """Map a heading string to a canonical attribute key."""
     for keyword, key in _SECTION_MAP.items():
         if keyword in heading:
             return key
-    return "backstory"   # default bucket for unrecognised sections
+    return "backstory"
 
 
 def _fandom_slug(fandom: str) -> str:
-    """
-    Convert a user-supplied fandom name to a Fandom subdomain slug.
-    e.g. "Harry Potter" → "harrypotter", "MCU" → "marvelcinematicuniverse"
-    """
-    # Common aliases
     aliases = {
-        "mcu":         "marvelcinematicuniverse",
-        "marvel":      "marvelcinematicuniverse",
-        "dc":          "dc",
-        "star wars":   "starwars",
-        "starwars":    "starwars",
-        "harry potter":"harrypotter",
-        "avatar":      "avatar",
-        "lotr":        "lotr",
-        "lord of the rings": "lotr",
-        "game of thrones":   "gameofthrones",
-        "got":         "gameofthrones",
-        "naruto":      "naruto",
-        "one piece":   "onepiece",
-        "attack on titan": "attackontitan",
-        "aot":         "attackontitan",
-        "bartimaeus sequence":      "bartimaeus",
-        "the bartimaeus sequence":  "bartimaeus",
-        "bartimaeus trilogy":       "bartimaeus",
+        "mcu":                       "marvelcinematicuniverse",
+        "marvel":                    "marvelcinematicuniverse",
+        "dc":                        "dc",
+        "star wars":                 "starwars",
+        "starwars":                  "starwars",
+        "harry potter":              "harrypotter",
+        "avatar":                    "avatar",
+        "lotr":                      "lotr",
+        "lord of the rings":         "lotr",
+        "game of thrones":           "gameofthrones",
+        "got":                       "gameofthrones",
+        "naruto":                    "naruto",
+        "one piece":                 "onepiece",
+        "attack on titan":           "attackontitan",
+        "aot":                       "attackontitan",
+        "bartimaeus sequence":       "bartimaeus",
+        "the bartimaeus sequence":   "bartimaeus",
+        "bartimaeus trilogy":        "bartimaeus",
     }
     slug = fandom.lower().strip()
     return aliases.get(slug, slug.replace(" ", ""))

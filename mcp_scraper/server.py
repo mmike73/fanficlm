@@ -1,27 +1,3 @@
-"""
-server.py — MCP server for the Fanfic Knowledge Base scraper.
-
-Exposes four tools to the LLM:
-  1. lookup_entity       — check the cache (SQL + vector) without scraping
-  2. scrape_and_store    — fetch from web, store in SQL + ChromaDB
-  3. search_knowledge    — semantic search over stored chunks
-  4. list_entities       — list everything currently in the knowledge base
-
-Transport: stdio (the MCP default, required by LM Studio)
-
-Usage (standalone test):
-    python -m mcp_scraper.server
-
-LM Studio config (~/.lmstudio/mcp_servers.json or via UI):
-    {
-      "fanfic-knowledge": {
-        "command": "python",
-        "args": ["-m", "mcp_scraper.server"],
-        "cwd": "/path/to/llm_proj"
-      }
-    }
-"""
-
 import asyncio
 import json
 import logging
@@ -36,19 +12,15 @@ from mcp.server.models import InitializationOptions
 from . import database, vector_store, scraper
 from .config import LOG_LEVEL
 
-# ── Logging ────────────────────────────────────────────────────────────────
 logging.basicConfig(
     level=getattr(logging, LOG_LEVEL, logging.INFO),
     format="%(asctime)s  %(levelname)-8s  %(name)s  %(message)s",
-    stream=sys.stderr,   # MCP uses stdout for protocol messages; logs go to stderr
+    stream=sys.stderr,
 )
 logger = logging.getLogger(__name__)
 
-# ── MCP Server instance ────────────────────────────────────────────────────
 app = Server("fanfic-knowledge-base")
 
-
-# ── Tool definitions ───────────────────────────────────────────────────────
 
 @app.list_tools()
 async def handle_list_tools() -> list[types.Tool]:
@@ -85,8 +57,8 @@ async def handle_list_tools() -> list[types.Tool]:
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "name":   {"type": "string", "description": "Character or topic name, e.g. 'Tony Stark'"},
-                    "fandom": {"type": "string", "description": "Fandom/universe, e.g. 'MCU', 'harrypotter', 'naruto'"},
+                    "name":   {"type": "string", "description": "Character or topic name"},
+                    "fandom": {"type": "string", "description": "Fandom/universe"},
                 },
                 "required": ["name", "fandom"],
             },
@@ -96,8 +68,7 @@ async def handle_list_tools() -> list[types.Tool]:
             description=(
                 "Scrape character or topic information from the web (Fandom wiki or Wikipedia) "
                 "and store it in the knowledge base. "
-                "Use this when lookup_entity returns nothing or stale data. "
-                "Returns a summary of what was found."
+                "Use this when lookup_entity returns nothing or stale data."
             ),
             inputSchema={
                 "type": "object",
@@ -109,7 +80,7 @@ async def handle_list_tools() -> list[types.Tool]:
                         "enum": ["character", "place", "concept", "event"],
                         "description": "Type of entity (default: character)",
                     },
-                    "force":       {
+                    "force": {
                         "type": "boolean",
                         "description": "Force re-scrape even if cached data is fresh (default: false)",
                     },
@@ -122,13 +93,12 @@ async def handle_list_tools() -> list[types.Tool]:
             description=(
                 "Semantic search over the knowledge base. "
                 "Use this to retrieve relevant character traits, backstory, or relationships "
-                "to enrich fanfiction generation. "
-                "Returns the top matching text chunks with their source metadata."
+                "to enrich fanfiction generation."
             ),
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "query":       {"type": "string",  "description": "Natural language query, e.g. 'sarcastic genius inventor'"},
+                    "query":       {"type": "string",  "description": "Natural language query"},
                     "fandom":      {"type": "string",  "description": "Limit results to this fandom (optional)"},
                     "entity_name": {"type": "string",  "description": "Limit results to this character (optional)"},
                     "chunk_type":  {
@@ -136,17 +106,14 @@ async def handle_list_tools() -> list[types.Tool]:
                         "enum": ["personality", "backstory", "appearance", "powers", "relationships", "trivia", "description"],
                         "description": "Limit to a specific type of information (optional)",
                     },
-                    "n_results":   {"type": "integer", "description": "Number of results to return (default: 5, max: 20)"},
+                    "n_results": {"type": "integer", "description": "Number of results to return (default: 5, max: 20)"},
                 },
                 "required": ["query"],
             },
         ),
         types.Tool(
             name="list_entities",
-            description=(
-                "List all characters and topics currently stored in the knowledge base. "
-                "Optionally filter by fandom or entity type."
-            ),
+            description="List all characters and topics currently stored in the knowledge base.",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -158,8 +125,6 @@ async def handle_list_tools() -> list[types.Tool]:
         ),
     ]
 
-
-# ── Tool handlers ──────────────────────────────────────────────────────────
 
 @app.call_tool()
 async def handle_call_tool(name: str, arguments: dict[str, Any]) -> list[types.TextContent]:
@@ -185,9 +150,7 @@ async def handle_call_tool(name: str, arguments: dict[str, Any]) -> list[types.T
     return [types.TextContent(type="text", text=json.dumps(result, indent=2, ensure_ascii=False))]
 
 
-# ── Tool implementations ───────────────────────────────────────────────────
-
-_ATTR_PREVIEW_CHARS = 300   # max chars per attribute value in tool responses
+_ATTR_PREVIEW_CHARS = 300
 
 
 def _truncate_attrs(attrs: dict) -> dict:
@@ -202,23 +165,20 @@ async def _tool_get_entity(args: dict) -> dict:
 
     entity = await asyncio.to_thread(database.get_entity, name, fandom)
     if entity and database.is_cache_fresh(entity):
-        top_chunks = await asyncio.to_thread(
-            vector_store.search, name, 8, fandom, None, None
-        )
+        top_chunks = await asyncio.to_thread(vector_store.search, name, 8, fandom, None, None)
         return {
             "source": "cache",
             "entity": {
-                "name":        entity.name,
-                "fandom":      entity.fandom,
-                "entity_type": entity.entity_type,
-                "description": entity.description,
-                "source_url":  entity.source_url,
+                "name":         entity.name,
+                "fandom":       entity.fandom,
+                "entity_type":  entity.entity_type,
+                "description":  entity.description,
+                "source_url":   entity.source_url,
                 "last_scraped": entity.last_scraped_at.isoformat() if entity.last_scraped_at else None,
             },
             "canon_details": [{"type": c["chunk_type"], "text": c["text"]} for c in top_chunks],
         }
 
-    # Not cached or stale — scrape now
     result = await asyncio.to_thread(scraper.scrape_entity, name, fandom, entity_type)
     if not result.success:
         return {"error": f"Could not find '{name}' ({fandom}): {result.error}"}
@@ -228,14 +188,11 @@ async def _tool_get_entity(args: dict) -> dict:
     await asyncio.to_thread(vector_store.delete_entity_chunks, name, fandom)
     chunks = scraper.make_chunks(result.entity, entity_id, result.attributes)
     await asyncio.to_thread(vector_store.upsert_chunks, chunks)
-
-    top_chunks = await asyncio.to_thread(
-        vector_store.search, name, 8, fandom, None, None
-    )
+    top_chunks = await asyncio.to_thread(vector_store.search, name, 8, fandom, None, None)
 
     return {
-        "source": result.entity.source_type,
-        "source_url": result.entity.source_url,
+        "source":       result.entity.source_type,
+        "source_url":   result.entity.source_url,
         "entity": {
             "name":        result.entity.name,
             "fandom":      result.entity.fandom,
@@ -252,7 +209,6 @@ async def _tool_lookup_entity(args: dict) -> dict:
     fandom = args["fandom"].strip()
 
     entity = await asyncio.to_thread(database.get_entity, name, fandom)
-
     if entity is None:
         return {
             "found": False,
@@ -263,15 +219,15 @@ async def _tool_lookup_entity(args: dict) -> dict:
     attrs    = await asyncio.to_thread(database.get_attributes, entity.id)
 
     return {
-        "found": True,
+        "found":       True,
         "cache_fresh": is_fresh,
         "entity": {
-            "name":           entity.name,
-            "fandom":         entity.fandom,
-            "entity_type":    entity.entity_type,
-            "description":    entity.description,
-            "source_url":     entity.source_url,
-            "last_scraped":   entity.last_scraped_at.isoformat() if entity.last_scraped_at else None,
+            "name":         entity.name,
+            "fandom":       entity.fandom,
+            "entity_type":  entity.entity_type,
+            "description":  entity.description,
+            "source_url":   entity.source_url,
+            "last_scraped": entity.last_scraped_at.isoformat() if entity.last_scraped_at else None,
         },
         "attributes": _truncate_attrs(attrs),
         "hint": None if is_fresh else "Cache is stale. Consider calling scrape_and_store with force=true.",
@@ -284,37 +240,28 @@ async def _tool_scrape_and_store(args: dict) -> dict:
     entity_type = args.get("entity_type", "character")
     force       = args.get("force", False)
 
-    # Cache check (skip if force=True)
     if not force:
         cached = await asyncio.to_thread(database.get_entity, name, fandom)
         if cached and database.is_cache_fresh(cached):
             return {
-                "status": "cache_hit",
-                "message": f"'{name}' ({fandom}) is already fresh in the knowledge base.",
-                "source_url": cached.source_url,
+                "status":      "cache_hit",
+                "message":     f"'{name}' ({fandom}) is already fresh in the knowledge base.",
+                "source_url":  cached.source_url,
                 "description": cached.description,
             }
 
-    # Run scraper in thread (blocking I/O)
     result = await asyncio.to_thread(scraper.scrape_entity, name, fandom, entity_type)
-
     if not result.success:
-        return {
-            "status": "error",
-            "message": f"Could not scrape '{name}' ({fandom}): {result.error}",
-        }
+        return {"status": "error", "message": f"Could not scrape '{name}' ({fandom}): {result.error}"}
 
-    # Persist to SQL
     entity_id = await asyncio.to_thread(database.upsert_entity, result.entity)
     await asyncio.to_thread(database.upsert_attributes, entity_id, result.attributes)
-
-    # Remove stale vectors, then re-embed
     await asyncio.to_thread(vector_store.delete_entity_chunks, name, fandom)
     chunks = scraper.make_chunks(result.entity, entity_id, result.attributes)
     await asyncio.to_thread(vector_store.upsert_chunks, chunks)
 
     return {
-        "status": "success",
+        "status":        "success",
         "name":          result.entity.name,
         "fandom":        result.entity.fandom,
         "source":        result.entity.source_type,
@@ -333,36 +280,24 @@ async def _tool_search_knowledge(args: dict) -> dict:
     n_results   = min(int(args.get("n_results", 5)), 20)
 
     hits = await asyncio.to_thread(
-        vector_store.search,
-        query,
-        n_results,
-        fandom,
-        entity_name,
-        chunk_type,
+        vector_store.search, query, n_results, fandom, entity_name, chunk_type
     )
 
     if not hits:
-        return {
-            "results": [],
-            "message": "No matching knowledge found. Try scrape_and_store first.",
-        }
+        return {"results": [], "message": "No matching knowledge found. Try scrape_and_store first."}
 
-    return {
-        "query":   query,
-        "results": hits,
-        "count":   len(hits),
-    }
+    return {"query": query, "results": hits, "count": len(hits)}
 
 
 async def _tool_list_entities(args: dict) -> dict:
     fandom      = args.get("fandom")
     entity_type = args.get("entity_type")
 
-    entities = await asyncio.to_thread(database.list_entities, fandom, entity_type)
+    entities     = await asyncio.to_thread(database.list_entities, fandom, entity_type)
     total_chunks = await asyncio.to_thread(vector_store.count)
 
     return {
-        "entity_count":       len(entities),
+        "entity_count":        len(entities),
         "total_vector_chunks": total_chunks,
         "entities": [
             {
@@ -378,12 +313,15 @@ async def _tool_list_entities(args: dict) -> dict:
     }
 
 
-# ── Entry point ────────────────────────────────────────────────────────────
-
 async def main():
-    # Initialise database on startup
     database.init_db()
     logger.info("Fanfic Knowledge Base MCP server starting (stdio transport)...")
+
+    # Pre-warm the embedding model so the first tool call doesn't time out.
+    # Cold load takes ~8 s (HuggingFace cache checks + model weights).
+    logger.info("Pre-warming ChromaDB embedding model...")
+    await asyncio.to_thread(vector_store._get_collection)
+    logger.info("Embedding model ready.")
 
     async with mcp.server.stdio.stdio_server() as (read_stream, write_stream):
         await app.run(
