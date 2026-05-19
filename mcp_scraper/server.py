@@ -243,6 +243,17 @@ async def _tool_scrape_and_store(args: dict) -> dict:
     if not force:
         cached = await asyncio.to_thread(database.get_entity, name, fandom)
         if cached and database.is_cache_fresh(cached):
+            # Guard: ChromaDB may be missing chunks even though SQLite is fresh
+            # (e.g. after a vector store reset, or if the initial write failed).
+            chroma_ok = await asyncio.to_thread(vector_store.has_entity_chunks, name, fandom)
+            if not chroma_ok:
+                attrs = await asyncio.to_thread(database.get_attributes, cached.id)
+                if attrs:
+                    chunks = scraper.make_chunks(cached, cached.id, attrs)
+                    await asyncio.to_thread(vector_store.upsert_chunks, chunks)
+                    logger.info(
+                        f"Backfilled {len(chunks)} ChromaDB chunks for '{name}' ({fandom}) from SQLite cache"
+                    )
             return {
                 "status":      "cache_hit",
                 "message":     f"'{name}' ({fandom}) is already fresh in the knowledge base.",

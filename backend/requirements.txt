@@ -9,3 +9,4 @@ turbovec
 sentence-transformers
 datasets
 numpy
+chromadb
