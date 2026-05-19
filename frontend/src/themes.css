@@ -1,0 +1,246 @@
+/*
+ * Topic themes for the fanfic chatbot.
+ *
+ * Applied by setting `data-theme="<name>"` on the <html> element from
+ * App.jsx. Each block only overrides the variables it cares about;
+ * anything left out falls through to the defaults in index.css.
+ *
+ * Variable names must match index.css exactly — if you rename one
+ * there, rename it here too.
+ */
+
+/* ─── LOVE ─── soft blush, candlelight, romance-novel paperback */
+[data-theme="love"] {
+  --bg: #2a0e1a;
+  --text: #fce4ec;
+  --text-muted: #c89aa8;
+  --text-faint: #6b3d4e;
+  --text-dim: #8a5a6e;
+
+  --bubble-user-bg: #6b1f3a;
+  --bubble-user-border: #8a2a4e;
+  --bubble-user-text: #fce4ec;
+  --bubble-assistant-text: #f0d0d8;
+
+  --avatar-assistant: linear-gradient(135deg, #ff6b9d, #c44872);
+  --avatar-user-bg: #4a1a2e;
+  --avatar-user-border: #6b2a44;
+
+  --input-bg: #3a1424;
+  --input-border: #5a2038;
+  --input-focus-border: #ff6b9d;
+  --input-focus-ring: rgba(255, 107, 157, 0.15);
+
+  --send-bg: linear-gradient(135deg, #ff6b9d, #c44872);
+  --typing-dot: #ff6b9d;
+  --scrollbar: #5a2038;
+
+  --font-display: 'Cormorant Garamond', Georgia, serif;
+}
+
+/* ─── SADNESS ─── rain on a window, muted blues, low contrast */
+[data-theme="sadness"] {
+  --bg: #0d1620;
+  --text: #c5d1de;
+  --text-muted: #5a6e80;
+  --text-faint: #2a3a4a;
+  --text-dim: #3a4e60;
+
+  --bubble-user-bg: #1f2d3f;
+  --bubble-user-border: #2e3e54;
+  --bubble-user-text: #c5d1de;
+  --bubble-assistant-text: #aab8c8;
+
+  --avatar-assistant: linear-gradient(135deg, #6b9bc4, #4a6e8a);
+  --avatar-user-bg: #1a2532;
+  --avatar-user-border: #2a3a4a;
+
+  --input-bg: #142030;
+  --input-border: #1f2d3f;
+  --input-focus-border: #6b9bc4;
+  --input-focus-ring: rgba(107, 155, 196, 0.12);
+
+  --send-bg: linear-gradient(135deg, #6b9bc4, #4a6e8a);
+  --typing-dot: #6b9bc4;
+  --scrollbar: #1f2d3f;
+
+  --font-display: 'Libre Caslon Text', Georgia, serif;
+}
+
+/* ─── ANIME ─── vivid, electric, neon pink + cyan */
+[data-theme="anime"] {
+  --bg: #1a0f2e;
+  --text: #f5f0ff;
+  --text-muted: #b8a8d4;
+  --text-faint: #5a4878;
+  --text-dim: #7a68a0;
+
+  --bubble-user-bg: #ff3d8a;
+  --bubble-user-border: #ff5a9d;
+  --bubble-user-text: #ffffff;
+  --bubble-assistant-text: #e8e0ff;
+
+  --avatar-assistant: linear-gradient(135deg, #00e5ff, #ff3d8a);
+  --avatar-user-bg: #3d1f5a;
+  --avatar-user-border: #5a2d80;
+
+  --input-bg: #2a1545;
+  --input-border: #4a2878;
+  --input-focus-border: #00e5ff;
+  --input-focus-ring: rgba(0, 229, 255, 0.18);
+
+  --send-bg: linear-gradient(135deg, #00e5ff, #ff3d8a);
+  --typing-dot: #00e5ff;
+  --scrollbar: #4a2878;
+
+  --font-display: 'Bangers', Impact, sans-serif;
+}
+
+/* ─── HISTORY ─── aged parchment, sepia, ink, faded gold */
+[data-theme="history"] {
+  --bg: #2a241a;
+  --text: #e8dcc4;
+  --text-muted: #a89878;
+  --text-faint: #5a4e3a;
+  --text-dim: #6e6048;
+
+  --bubble-user-bg: #5a4a30;
+  --bubble-user-border: #786448;
+  --bubble-user-text: #f0e4cc;
+  --bubble-assistant-text: #d8ccb4;
+
+  --avatar-assistant: linear-gradient(135deg, #c89858, #8a6e3a);
+  --avatar-user-bg: #3a3024;
+  --avatar-user-border: #5a4a30;
+
+  --input-bg: #3a3024;
+  --input-border: #4a3e2a;
+  --input-focus-border: #c89858;
+  --input-focus-ring: rgba(200, 152, 88, 0.14);
+
+  --send-bg: linear-gradient(135deg, #c89858, #8a6e3a);
+  --typing-dot: #c89858;
+  --scrollbar: #4a3e2a;
+
+  --font-display: 'EB Garamond', Georgia, serif;
+}
+
+/* ─── WAR ─── olive drab, gunmetal, rust — grim and weighty */
+[data-theme="war"] {
+  --bg: #1a1814;
+  --text: #d4d0c4;
+  --text-muted: #807a6a;
+  --text-faint: #3a3528;
+  --text-dim: #524a3a;
+
+  --bubble-user-bg: #3a3528;
+  --bubble-user-border: #524a3a;
+  --bubble-user-text: #d4d0c4;
+  --bubble-assistant-text: #b8b4a8;
+
+  --avatar-assistant: linear-gradient(135deg, #a83a2a, #6e2418);
+  --avatar-user-bg: #25231d;
+  --avatar-user-border: #3a3528;
+
+  --input-bg: #25231d;
+  --input-border: #2e2a20;
+  --input-focus-border: #a83a2a;
+  --input-focus-ring: rgba(168, 58, 42, 0.14);
+
+  --send-bg: linear-gradient(135deg, #a83a2a, #6e2418);
+  --typing-dot: #a83a2a;
+  --scrollbar: #2e2a20;
+
+  --font-display: 'Oswald', Impact, sans-serif;
+}
+
+/* ─── COZY ─── warm cream, soft amber — fireplace light (LIGHT theme) */
+[data-theme="cozy"] {
+  --bg: #f5ead8;
+  --text: #3a2a1e;
+  --text-muted: #8a6e58;
+  --text-faint: #b89878;
+  --text-dim: #a88a6e;
+
+  --bubble-user-bg: #d4a574;
+  --bubble-user-border: #b88a5a;
+  --bubble-user-text: #3a2a1e;
+  --bubble-assistant-text: #4a3a2a;
+
+  --avatar-assistant: linear-gradient(135deg, #b8743a, #8a521e);
+  --avatar-user-bg: #ebdfc8;
+  --avatar-user-border: #d8c8a8;
+
+  --input-bg: #ebdfc8;
+  --input-border: #d8c8a8;
+  --input-focus-border: #b8743a;
+  --input-focus-ring: rgba(184, 116, 58, 0.18);
+
+  --send-bg: linear-gradient(135deg, #b8743a, #8a521e);
+  --typing-dot: #b8743a;
+  --scrollbar: #c8b890;
+
+  --error-bg: #fce4d8;
+  --error-border: #e8a888;
+  --error-text: #8a2a18;
+
+  --font-display: 'Caveat', cursive;
+}
+
+/* ─── ROYAL ─── deep purple, burnished gold, velvet and brocade */
+[data-theme="royal"] {
+  --bg: #1a0e2e;
+  --text: #f0e4c8;
+  --text-muted: #b8a878;
+  --text-faint: #4a3a5e;
+  --text-dim: #6a5478;
+
+  --bubble-user-bg: #3d1f5e;
+  --bubble-user-border: #5a2d80;
+  --bubble-user-text: #f0e4c8;
+  --bubble-assistant-text: #d8ccaa;
+
+  --avatar-assistant: linear-gradient(135deg, #d4af37, #8a6e1a);
+  --avatar-user-bg: #261445;
+  --avatar-user-border: #3d1f5e;
+
+  --input-bg: #261445;
+  --input-border: #4a2a6e;
+  --input-focus-border: #d4af37;
+  --input-focus-ring: rgba(212, 175, 55, 0.16);
+
+  --send-bg: linear-gradient(135deg, #d4af37, #8a6e1a);
+  --typing-dot: #d4af37;
+  --scrollbar: #4a2a6e;
+
+  --font-display: 'Cinzel', Georgia, serif;
+}
+
+/* ─── MAFIA ─── noir charcoal, blood red, brass-lamp glint */
+[data-theme="mafia"] {
+  --bg: #0a0a0a;
+  --text: #d8d8d8;
+  --text-muted: #707070;
+  --text-faint: #2a2a2a;
+  --text-dim: #404040;
+
+  --bubble-user-bg: #2a0a0a;
+  --bubble-user-border: #4a1414;
+  --bubble-user-text: #e8d8d8;
+  --bubble-assistant-text: #b8b8b8;
+
+  --avatar-assistant: linear-gradient(135deg, #8b0000, #4a0000);
+  --avatar-user-bg: #141414;
+  --avatar-user-border: #2a2a2a;
+
+  --input-bg: #141414;
+  --input-border: #1f1f1f;
+  --input-focus-border: #8b0000;
+  --input-focus-ring: rgba(139, 0, 0, 0.2);
+
+  --send-bg: linear-gradient(135deg, #8b0000, #4a0000);
+  --typing-dot: #8b0000;
+  --scrollbar: #1f1f1f;
+
+  --font-display: 'Playfair Display', Georgia, serif;
+}
