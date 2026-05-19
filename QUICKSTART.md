@@ -255,6 +255,216 @@ Features:
 
 ---
 
+---
+
+## 7. Model stability & two-model setup
+
+### Why models return empty responses
+
+LM Studio shows "This message contains no content" when the model generates zero tokens.
+The three most common causes:
+
+| Cause | Symptom | Fix |
+|---|---|---|
+| `max_tokens` not set | Instant empty reply | Set **Response length** in LM Studio, or add `MAX_TOKENS=2048` to `backend/.env` |
+| Context window exceeded | Empty reply after long tool output | Lower context or increase **Context length** slider |
+| Wrong chat template | Empty or garbled reply | Confirm the template in LM Studio matches the model family |
+| Model not fully loaded | Empty reply with no error | Check GPU/CPU memory — model may have been partially evicted |
+
+---
+
+### LM Studio settings for stable tool calling
+
+Open the model panel (right sidebar) and set the following before starting a scraping session.
+
+#### Context length
+
+Tool responses from this MCP server are verbose — each `scrape_and_store` reply can be 1–3 KB of JSON. For a bulk ingest of 6 characters the conversation can easily reach 20 K tokens.
+
+| Model size | Recommended context |
+|---|---|
+| 12B (Gemma 3 12B, Mistral 12B) | 32 768 |
+| 4B (Gemma 3 4B, Phi-4 mini) | 8 192 |
+| 1B–2B | 4 096 |
+
+Enable **Flash Attention** whenever you increase context beyond the model's default — it cuts memory use roughly in half.
+
+#### GPU offload
+
+Set **GPU Layers** to the maximum your VRAM allows (`-1` = auto in LM Studio).
+Partial CPU offload causes the model to stall mid-generation, which can look like an empty response.
+
+Minimum VRAM to keep the model fully on GPU:
+
+| Model | VRAM (Q4_K_M) |
+|---|---|
+| Gemma 3 1B | ~1 GB |
+| Gemma 3 4B | ~3 GB |
+| Gemma 3 12B | ~8 GB |
+
+#### Temperature and sampling
+
+For reliable tool calling use lower temperature than you would for creative writing:
+
+```
+Temperature:   0.2   (not 0.7 — higher values cause the model to improvise tool arguments)
+Top-P:         0.9
+Repeat penalty: 1.05
+```
+
+After scraping is done and you switch to story generation, raise temperature back to 0.7–1.0.
+
+#### Response length (max_tokens)
+
+Always set this explicitly. LM Studio defaults vary by model and some default to 0 (unlimited), which causes Gemma models to emit an EOS token immediately on some prompts.
+
+Recommended values:
+
+| Task | max_tokens |
+|---|---|
+| Tool calling / scraping | 1 024 |
+| Story generation | 2 048–4 096 |
+
+This is also configurable in the backend — add to `backend/.env`:
+
+```
+MAX_TOKENS=2048
+```
+
+---
+
+### Smaller Gemma models (3 4B, 3 1B)
+
+The 4B and 1B models are less reliable at multi-step tool calling. Two adjustments help significantly.
+
+#### 1. Shorten the system prompt
+
+The full `system_scraper.txt` is ~400 tokens. Smaller models lose track of the instructions
+mid-conversation. Use this condensed version instead:
+
+```
+You are a tool-calling agent. You have three tools: list_entities, lookup_entity, scrape_and_store.
+
+Rules:
+- Always call lookup_entity before scrape_and_store.
+- Paste the raw JSON from every tool call verbatim. Do not summarise.
+- If a tool returns an error, report it and stop.
+- Never invent tool results.
+```
+
+Save it as `backend/prompts/system_scraper_small.txt` and point the model at it.
+
+#### 2. One character at a time
+
+Smaller models reliably handle one character per prompt. Bulk lists confuse them.
+Instead of:
+
+```
+Store: Naruto, Sasuke, Sakura, Kakashi
+```
+
+Send four separate prompts:
+
+```
+Store Naruto Uzumaki, fandom Naruto.
+```
+```
+Store Sasuke Uchiha, fandom Naruto.
+```
+
+#### 3. Confirm the chat template
+
+Gemma 3 uses `<start_of_turn>` / `<end_of_turn>` tokens. LM Studio sets this automatically
+when you load a GGUF from the official Gemma 3 release, but if you use a community re-upload,
+manually select **Gemma** in the **Chat template** dropdown under the model settings.
+A wrong template causes the EOS token to fire immediately, producing an empty reply.
+
+---
+
+### Two-model pattern: scraper + writer
+
+Running a dedicated small model for scraping and a larger model for generation gives you the
+best quality output without keeping a large model loaded all the time.
+
+```
+┌─────────────────────┐      MCP tools      ┌──────────────────────┐
+│  Curator model      │ ──────────────────► │  fanfic-knowledge-   │
+│  (Gemma 3 4B)       │  scrape_and_store   │  base MCP server     │
+│  LM Studio chat     │  lookup_entity      │  ChromaDB + SQLite   │
+└─────────────────────┘                     └──────┬───────────────┘
+                                                   │  search_knowledge
+                                                   ▼
+                                            ┌──────────────────────┐
+                                            │  Writer model        │
+                                            │  (Gemma 3 12B or     │
+                                            │   any larger model)  │
+                                            │  backend API / chat  │
+                                            └──────────────────────┘
+```
+
+#### Step 1 — Load the curator model
+
+In LM Studio, load **Gemma 3 4B** (or any 4B–7B model).
+Attach the `fanfic-knowledge-base` MCP server and load `system_scraper_small.txt` as the system prompt.
+Use this session only for scraping. Keep temperature at 0.2.
+
+#### Step 2 — Ingest your characters
+
+```
+Store Selly (Andrei Selaru), fandom romania vlogger.
+```
+
+The model calls `lookup_entity`, gets `found: false`, then calls `scrape_and_store`.
+Repeat for every character you need. When you are done, close or switch away from this session.
+
+#### Step 3 — Load the writer model
+
+In LM Studio, open a **new chat** (or load a second LM Studio instance on a different port).
+Load your larger model — **Gemma 3 12B**, Mistral, Qwen 2.5, etc.
+Keep the MCP server connected so the writer can call `search_knowledge` for RAG lookups.
+
+Use a writer system prompt, for example:
+
+```
+You are a creative fanfiction writer. Before writing any scene, call search_knowledge
+to retrieve relevant facts about the characters from the knowledge base.
+Use only what the tool returns — do not invent biography details.
+```
+
+#### Step 4 — Generate
+
+```
+Write a short scene where Selly is preparing for a YouTube collaboration video.
+Use the knowledge base to get accurate details about him first.
+```
+
+The writer model calls `search_knowledge("Selly romania vlogger")`, gets the stored chunks,
+then writes the scene grounded in those facts.
+
+#### Running both models from the backend
+
+If you want to automate the pipeline (curator → store → writer → generate) without
+manual LM Studio sessions, run two backend instances pointing at different LM Studio ports:
+
+```bash
+# Terminal 1 — curator
+LM_STUDIO_BASE_URL=http://localhost:1234/v1 \
+LM_STUDIO_MODEL=gemma-3-4b \
+MAX_TOKENS=1024 \
+uvicorn app.main:app --port 8000
+
+# Terminal 2 — writer
+LM_STUDIO_BASE_URL=http://localhost:1234/v1 \
+LM_STUDIO_MODEL=gemma-3-12b \
+MAX_TOKENS=4096 \
+uvicorn app.main:app --port 8001
+```
+
+Or use a single LM Studio instance and switch models between API calls — LM Studio
+reloads the model automatically when you specify a different `model` field in the request.
+
+---
+
 ## Troubleshooting
 
 | Symptom | Cause | Fix |
@@ -265,3 +475,5 @@ Features:
 | Scrape fails for a character | Wiki page not found or rate-limited | Try again, or check `scraper_data/knowledge.db` for error details |
 | Duplicate fandom spellings (e.g. `naruto` vs `Naruto`) | Case mismatch on initial scrape | Add alias to `_fandom_slug()` in `mcp_scraper/scraper.py` |
 | DB Explorer shows no data | Wrong working directory | Run from the project root, not from `tools/` |
+| "This message contains no content" in LM Studio | `max_tokens` not set, or wrong chat template | See section 7 — set Response Length and verify chat template |
+| Scraper stores the wrong character (e.g. an anime character instead of a vlogger) | Jikan/AniList fuzzy match returned a false positive | Ensure `force=true` on the next `scrape_and_store`; the fixed scraper no longer takes unverified first results |
