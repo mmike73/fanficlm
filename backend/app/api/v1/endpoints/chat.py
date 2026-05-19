@@ -34,5 +34,4 @@ async def chat(body: ChatRequest, request: Request):
         reply = await lm_client.chat_completion(messages, rag_context=rag_context)
         return ChatResponse(reply=reply)
     except Exception as e:
-        traceback.print_exc()
         raise HTTPException(status_code=502, detail=f"{type(e).__name__}: {e}")
