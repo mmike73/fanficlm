@@ -17,6 +17,7 @@ class LMClient:
             "model": self.model,
             "messages": [{"role": "system", "content": self.system_prompt}, *messages],
             "temperature": self.temperature,
+            "max_tokens": app_settings.MAX_TOKENS,
         }
         async with httpx.AsyncClient() as client:
             response = await client.post(
@@ -26,4 +27,13 @@ class LMClient:
             )
             response.raise_for_status()
             data = response.json()
-            return data["choices"][0]["message"]["content"]
+            choice = data["choices"][0]
+            content = choice["message"]["content"]
+            if not content or not content.strip():
+                finish_reason = choice.get("finish_reason", "unknown")
+                raise ValueError(
+                    f"Model returned an empty response "
+                    f"(finish_reason={finish_reason!r}). "
+                    "Check that LM Studio has the model loaded and MAX_TOKENS is set."
+                )
+            return content

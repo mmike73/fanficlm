@@ -163,6 +163,141 @@ Expected: `scrape_and_store` fails (no wiki page found), model reports the error
 
 ---
 
+---
+
+## Wattpad-popular characters (confirmed Fandom wiki pages)
+
+These are characters from the fandoms most commonly written about on Wattpad.
+Use them to verify the scraper returns rich attribute data (personality, backstory, appearance).
+
+### 13. Twilight — main cast
+
+```
+Store these characters from Twilight:
+- Edward Cullen
+- Bella Swan
+- Jacob Black
+- Alice Cullen
+```
+
+Expected: fandom slug resolves to `twilight`, four scrape+store cycles with backstory and personality chunks.
+
+---
+
+### 14. The Vampire Diaries / The Originals
+
+```
+Check and store:
+- Damon Salvatore, The Vampire Diaries
+- Elena Gilbert, The Vampire Diaries
+- Klaus Mikaelson, The Originals
+- Caroline Forbes, The Vampire Diaries
+```
+
+Expected: fandom slugs `vampirediaries` and `theoriginals`, rich personality sections from the respective wikis.
+
+---
+
+### 15. Shadowhunters / The Mortal Instruments
+
+```
+Store these Shadowhunters characters:
+- Jace Herondale
+- Clary Fray
+- Magnus Bane
+- Alec Lightwood
+```
+
+Expected: fandom slug `shadowhunters`, chunks with powers/abilities sections (runes, warlock magic).
+
+---
+
+### 16. Supernatural
+
+```
+Store these characters from Supernatural:
+- Dean Winchester
+- Sam Winchester
+- Castiel
+```
+
+Expected: fandom slug `supernatural`, detailed backstory and relationship chunks.
+
+---
+
+### 17. Percy Jackson
+
+```
+Store these Percy Jackson characters:
+- Percy Jackson
+- Annabeth Chase
+- Nico di Angelo
+- Luke Castellan
+```
+
+Expected: fandom slug `percyjackson`, powers sections with godly abilities.
+
+---
+
+### 18. Teen Wolf
+
+```
+Store the main cast of Teen Wolf:
+- Scott McCall
+- Stiles Stilinski
+- Derek Hale
+- Lydia Martin
+```
+
+Expected: fandom slug `teenwolf`, personality and backstory chunks.
+
+---
+
+### 19. The Hunger Games
+
+```
+Store these Hunger Games characters:
+- Katniss Everdeen
+- Peeta Mellark
+- Finnick Odair
+- Haymitch Abernathy
+```
+
+Expected: fandom slug `thehungergames`, backstory chunks with district context.
+
+---
+
+### 20. Maze Runner
+
+```
+Store these Maze Runner characters:
+- Thomas, Maze Runner
+- Newt, Maze Runner
+- Teresa Agnes, Maze Runner
+- Minho, Maze Runner
+```
+
+Expected: fandom slug `mazerunner`, backstory and personality data.
+
+---
+
+### 21. Mixed Wattpad fandoms — stress test
+
+```
+Store these characters (mixed fandoms):
+- Draco Malfoy, Harry Potter
+- Edward Cullen, Twilight
+- Damon Salvatore, The Vampire Diaries
+- Jace Herondale, Shadowhunters
+- Dean Winchester, Supernatural
+- Percy Jackson, Percy Jackson
+```
+
+Expected: six sequential check+scrape cycles across six different fandom wikis.
+Final summary table should show entity name, fandom, chunks stored, and attribute keys.
+
+---
+
 ## Tips
 
 - If LM Studio calls `get_entity` instead of `lookup_entity` + `scrape_and_store`, that is also correct — `get_entity` combines both steps.

@@ -15,11 +15,23 @@ from .config import (
     REQUEST_DELAY_SECONDS,
     HTTP_TIMEOUT_SECONDS,
     MAX_RAW_TEXT_CHARS,
-    FANDOM_SEARCH_API,
+    FANDOM_BASE_URL,
+    FANDOM_MEDIAWIKI_API,
     WIKIPEDIA_SUMMARY_URL,
     WIKIPEDIA_SEARCH_URL,
+    ANILIST_API_URL,
+    JIKAN_API_URL,
+    WIKIDATA_API_URL,
+    WATTPAD_API_URL,
     SOURCE_PRIORITY,
 )
+
+try:
+    from curl_cffi import requests as _cf_requests
+    _CURL_CFFI_AVAILABLE = True
+except ImportError:
+    _CURL_CFFI_AVAILABLE = False
+    logger.warning("curl_cffi not installed — Fandom will be blocked by Cloudflare. Run: pip install curl_cffi")
 from .models import Entity, ScrapeResult, Chunk
 
 logger = logging.getLogger(__name__)
@@ -73,6 +85,41 @@ def _get(url: str, params: Optional[dict] = None) -> Optional[httpx.Response]:
         return None
 
 
+def _get_fandom(url: str, params: Optional[dict] = None):
+    """
+    GET with Chrome TLS fingerprint impersonation (curl_cffi) to bypass
+    Cloudflare bot detection on Fandom wikis. Falls back to plain httpx
+    if curl_cffi is not installed, though that will likely be blocked.
+    """
+    time.sleep(REQUEST_DELAY_SECONDS)
+    if not _CURL_CFFI_AVAILABLE:
+        return _get(url, params)
+    try:
+        resp = _cf_requests.get(
+            url,
+            params=params,
+            impersonate="chrome120",
+            timeout=HTTP_TIMEOUT_SECONDS,
+        )
+        resp.raise_for_status()
+        return resp
+    except Exception as e:
+        logger.warning(f"Fandom request failed {url}: {e}")
+        return None
+
+
+def _post(url: str, **kwargs) -> Optional[httpx.Response]:
+    time.sleep(REQUEST_DELAY_SECONDS)
+    try:
+        with httpx.Client(timeout=HTTP_TIMEOUT_SECONDS, headers=_HEADERS, follow_redirects=True) as client:
+            resp = client.post(url, **kwargs)
+            resp.raise_for_status()
+            return resp
+    except httpx.HTTPError as e:
+        logger.warning(f"HTTP error posting {url}: {e}")
+        return None
+
+
 def scrape_entity(name: str, fandom: str, entity_type: str = "character") -> ScrapeResult:
     entity = Entity(name=name, fandom=fandom, entity_type=entity_type)
     last_error = "No source returned data"
@@ -80,8 +127,16 @@ def scrape_entity(name: str, fandom: str, entity_type: str = "character") -> Scr
     for source in SOURCE_PRIORITY:
         if source == "fandom":
             result = _scrape_fandom(entity)
+        elif source == "anilist":
+            result = _scrape_anilist(entity)
+        elif source == "jikan":
+            result = _scrape_jikan(entity)
+        elif source == "wikidata":
+            result = _scrape_wikidata(entity)
         elif source == "wikipedia":
             result = _scrape_wikipedia(entity)
+        elif source == "wattpad":
+            result = _scrape_wattpad(entity)
         else:
             continue
 
@@ -97,25 +152,27 @@ def scrape_entity(name: str, fandom: str, entity_type: str = "character") -> Scr
 
 def _scrape_fandom(entity: Entity) -> ScrapeResult:
     fandom_slug = _fandom_slug(entity.fandom)
-    search_url = FANDOM_SEARCH_API.format(fandom=fandom_slug, query=quote(entity.name))
+    base_url    = FANDOM_BASE_URL.format(fandom=fandom_slug)
+    api_url     = FANDOM_MEDIAWIKI_API.format(fandom=fandom_slug)
 
-    resp = _get(search_url)
-    if resp is None:
-        return ScrapeResult(entity=entity, success=False, error="Fandom search API failed")
+    # Use MediaWiki search API — more reliable than the Fandom v1 Search endpoint
+    search_resp = _get_fandom(api_url, params={
+        "action": "query", "list": "search",
+        "srsearch": entity.name, "srlimit": 3, "format": "json",
+    })
+    if search_resp is None:
+        return ScrapeResult(entity=entity, success=False, error="Fandom search failed")
 
     try:
-        data = resp.json()
-        items = data.get("items", [])
-        if not items:
+        hits = search_resp.json()["query"]["search"]
+        if not hits:
             return ScrapeResult(entity=entity, success=False, error="No Fandom results")
-        article_url = items[0].get("url", "")
-    except Exception as e:
-        return ScrapeResult(entity=entity, success=False, error=f"Fandom JSON parse error: {e}")
+        page_title = hits[0]["title"]
+    except (KeyError, IndexError, Exception) as e:
+        return ScrapeResult(entity=entity, success=False, error=f"Fandom search parse error: {e}")
 
-    if not article_url:
-        return ScrapeResult(entity=entity, success=False, error="Empty article URL from Fandom")
-
-    page_resp = _get(article_url)
+    article_url = f"{base_url}/wiki/{quote(page_title.replace(' ', '_'))}"
+    page_resp = _get_fandom(article_url)
     if page_resp is None:
         return ScrapeResult(entity=entity, success=False, error="Could not fetch Fandom article")
 
@@ -123,7 +180,7 @@ def _scrape_fandom(entity: Entity) -> ScrapeResult:
     if not attributes:
         return ScrapeResult(entity=entity, success=False, error="Fandom parse returned empty attributes")
 
-    entity.source_url = article_url
+    entity.source_url  = article_url
     entity.source_type = "fandom"
     entity.description = attributes.get("description", "")[:500]
 
@@ -172,20 +229,313 @@ def _parse_fandom_html(html: str) -> dict:
     return {k: "\n\n".join(v) for k, v in attributes.items() if v}
 
 
-def _scrape_wikipedia(entity: Entity) -> ScrapeResult:
-    title = _wikipedia_search(entity.name, fandom=entity.fandom)
-    if not title:
-        return ScrapeResult(entity=entity, success=False, error="Wikipedia search returned nothing")
+_ANILIST_CHARACTER_QUERY = """
+query ($search: String) {
+  Character(search: $search) {
+    name { full native alternative }
+    description(asHtml: false)
+    gender
+    age
+    siteUrl
+    media(perPage: 5) { nodes { title { romaji english } type } }
+  }
+}
+"""
 
-    name_words = entity.name.lower().split()
-    title_lower = title.lower()
-    if entity.entity_type == "character" and not any(w in title_lower for w in name_words if len(w) > 3):
-        return ScrapeResult(
-            entity=entity,
-            success=False,
-            error=f"No dedicated Wikipedia article found for '{entity.name}' — best match was '{title}'. Try a Fandom wiki.",
+
+def _scrape_anilist(entity: Entity) -> ScrapeResult:
+    char = None
+    for name_part in _name_parts(entity.name):
+        resp = _post(
+            ANILIST_API_URL,
+            json={"query": _ANILIST_CHARACTER_QUERY, "variables": {"search": name_part}},
         )
+        if resp is None:
+            continue
+        try:
+            candidate = resp.json().get("data", {}).get("Character")
+        except Exception:
+            continue
+        if not candidate:
+            continue
+        # Verify the returned character's name actually matches our query —
+        # AniList returns its best fuzzy match which can be a completely different character.
+        char_names = [
+            (candidate.get("name") or {}).get("full", ""),
+        ] + ((candidate.get("name") or {}).get("alternative") or [])
+        if any(_title_matches_name(n, entity.name) for n in char_names if n):
+            char = candidate
+            break
 
+    if not char:
+        return ScrapeResult(entity=entity, success=False, error="Character not found on AniList")
+
+    description = char.get("description") or ""
+    description = re.sub(r"~!.+?!~", "", description, flags=re.DOTALL)  # strip spoiler tags
+    description = re.sub(r"\*+", "", description).strip()
+
+    media_titles = [
+        (n.get("title", {}).get("english") or n.get("title", {}).get("romaji", "")).strip()
+        for n in (char.get("media", {}).get("nodes") or [])
+    ]
+
+    attributes: dict = {}
+    if description:
+        attributes["description"] = description
+        attributes["backstory"] = description
+
+    infobox_parts = []
+    if char.get("gender"):
+        infobox_parts.append(f"Gender: {char['gender']}")
+    if char.get("age"):
+        infobox_parts.append(f"Age: {char['age']}")
+    if infobox_parts:
+        attributes["infobox"] = "\n".join(infobox_parts)
+    if media_titles:
+        attributes["appearances"] = "Appears in: " + ", ".join(t for t in media_titles if t)
+
+    if not attributes:
+        return ScrapeResult(entity=entity, success=False, error="AniList returned no content")
+
+    entity.source_url = char.get("siteUrl", ANILIST_API_URL)
+    entity.source_type = "anilist"
+    entity.description = description[:500]
+    return ScrapeResult(entity=entity, attributes=attributes, success=True)
+
+
+def _scrape_jikan(entity: Entity) -> ScrapeResult:
+    """MyAnimeList character data via the Jikan REST API (no API key required)."""
+    char_data = None
+    for name_part in _name_parts(entity.name):
+        resp = _get(
+            f"{JIKAN_API_URL}/characters",
+            params={"q": name_part, "limit": 5, "order_by": "favorites", "sort": "desc"},
+        )
+        if resp is None:
+            continue
+        try:
+            results = resp.json().get("data", [])
+        except Exception:
+            continue
+        for r in results:
+            if _title_matches_name(r.get("name", ""), entity.name):
+                char_data = r
+                break
+        # No blind fallback — a name mismatch means this source has no match for us.
+        if char_data:
+            break
+
+    if not char_data:
+        return ScrapeResult(entity=entity, success=False, error="Character not found on MyAnimeList")
+
+    char_id = char_data.get("mal_id")
+    detail = char_data
+    if char_id:
+        detail_resp = _get(f"{JIKAN_API_URL}/characters/{char_id}/full")
+        if detail_resp:
+            try:
+                detail = detail_resp.json().get("data", char_data)
+            except Exception:
+                pass
+
+    about = (detail.get("about") or "").strip()
+    nicknames = detail.get("nicknames") or []
+
+    attributes: dict = {}
+    if about:
+        attributes["description"] = about[:MAX_RAW_TEXT_CHARS]
+        attributes["backstory"] = about[:MAX_RAW_TEXT_CHARS]
+    if nicknames:
+        attributes["infobox"] = "Also known as: " + ", ".join(nicknames)
+
+    if not attributes:
+        return ScrapeResult(entity=entity, success=False, error="Jikan returned no content")
+
+    entity.source_url = char_data.get("url", f"https://myanimelist.net/character/{char_id}")
+    entity.source_type = "jikan"
+    entity.description = about[:500]
+    return ScrapeResult(entity=entity, attributes=attributes, success=True)
+
+
+def _scrape_wikidata(entity: Entity) -> ScrapeResult:
+    """
+    Search Wikidata to find the canonical Wikipedia article title for any entity —
+    real people (vloggers, athletes, actors) or fictional characters that have a
+    dedicated Wikipedia page. Delegates content fetching to _fetch_wikipedia_article.
+    """
+    wikidata_id = None
+    wikidata_desc = ""
+
+    fandom_lower = entity.fandom.lower()
+    for name_part in _name_parts(entity.name):
+        resp = _get(WIKIDATA_API_URL, params={
+            "action": "wbsearchentities",
+            "search": name_part,
+            "language": "en",
+            "type": "item",
+            "limit": 10,
+            "format": "json",
+        })
+        if resp is None:
+            continue
+        try:
+            results = resp.json().get("search", [])
+        except Exception:
+            continue
+
+        # Prefer a result whose description mentions the fandom (e.g. "Romanian YouTuber")
+        for r in results:
+            label = r.get("label", "")
+            desc  = r.get("description", "").lower()
+            if _title_matches_name(label, entity.name) and fandom_lower in desc:
+                wikidata_id  = r["id"]
+                wikidata_desc = r.get("description", "")
+                break
+
+        # Fall back to any label match
+        if not wikidata_id:
+            for r in results:
+                if _title_matches_name(r.get("label", ""), entity.name):
+                    wikidata_id  = r["id"]
+                    wikidata_desc = r.get("description", "")
+                    break
+
+        if wikidata_id:
+            break
+
+    if not wikidata_id:
+        return ScrapeResult(entity=entity, success=False, error="Not found on Wikidata")
+
+    # Resolve the English Wikipedia title via sitelinks
+    links_resp = _get(WIKIDATA_API_URL, params={
+        "action": "wbgetentities",
+        "ids": wikidata_id,
+        "props": "sitelinks",
+        "format": "json",
+    })
+    enwiki_title = None
+    if links_resp:
+        try:
+            enwiki_title = (
+                links_resp.json()
+                .get("entities", {})
+                .get(wikidata_id, {})
+                .get("sitelinks", {})
+                .get("enwiki", {})
+                .get("title")
+            )
+        except Exception:
+            pass
+
+    if enwiki_title:
+        result = _fetch_wikipedia_article(entity, enwiki_title)
+        if result.success:
+            return result
+
+    if not wikidata_desc:
+        return ScrapeResult(entity=entity, success=False, error="Wikidata entity has no usable content")
+
+    entity.source_url = f"https://www.wikidata.org/wiki/{wikidata_id}"
+    entity.source_type = "wikidata"
+    entity.description = wikidata_desc[:500]
+    return ScrapeResult(entity=entity, attributes={"description": wikidata_desc}, success=True)
+
+
+def _scrape_wattpad(entity: Entity) -> ScrapeResult:
+    """
+    Search Wattpad for stories featuring this character/person.
+    Wattpad has no character profiles — we extract story descriptions as
+    supplementary context showing how fanfic writers portray the entity.
+    This source runs last and only fires if all authoritative sources fail.
+    """
+    query = f"{entity.name} {entity.fandom}".strip()
+    resp = _get(WATTPAD_API_URL, params={
+        "query": query,
+        "limit": 5,
+        "fields": "id,title,description,tags,mainCategory",
+    })
+    if resp is None:
+        return ScrapeResult(entity=entity, success=False, error="Wattpad request failed")
+
+    try:
+        stories = resp.json().get("stories", [])
+    except Exception as e:
+        return ScrapeResult(entity=entity, success=False, error=f"Wattpad parse error: {e}")
+
+    if not stories:
+        return ScrapeResult(entity=entity, success=False, error="No Wattpad stories found")
+
+    name_parts_lower = [p.lower() for p in _name_parts(entity.name)]
+    relevant = [
+        (s.get("title", ""), s.get("description", ""))
+        for s in stories
+        if any(p in (s.get("title", "") + " " + s.get("description", "")).lower()
+               for p in name_parts_lower)
+    ]
+    if not relevant:
+        relevant = [(s.get("title", ""), s.get("description", "")) for s in stories[:3]]
+
+    tags: set[str] = set()
+    for s in stories:
+        tags.update(s.get("tags") or [])
+
+    snippets = [f"Story: {t}\n{d}" for t, d in relevant if d]
+    if not snippets:
+        return ScrapeResult(entity=entity, success=False, error="Wattpad stories have no descriptions")
+
+    combined = "\n\n---\n\n".join(snippets)
+    attributes: dict = {
+        "fanfic_context": combined[:MAX_RAW_TEXT_CHARS],
+        "description": snippets[0][:1000],
+    }
+    if tags:
+        attributes["infobox"] = "Common Wattpad tags: " + ", ".join(sorted(tags)[:20])
+
+    entity.source_url = f"https://www.wattpad.com/search/{quote(query)}"
+    entity.source_type = "wattpad"
+    entity.description = snippets[0][:500]
+    return ScrapeResult(entity=entity, attributes=attributes, success=True)
+
+
+def _name_parts(name: str) -> list[str]:
+    """Split alias-style names like 'Selly or Andrei Selaru' into ['Selly', 'Andrei Selaru']."""
+    parts = [p.strip() for p in re.split(r'\s+or\s+', name, flags=re.IGNORECASE)]
+    return [p for p in parts if p]
+
+
+def _title_matches_name(title: str, name: str) -> bool:
+    """True if the title contains any part of a possibly alias-joined name."""
+    title_lower = title.lower()
+    return any(part.lower() in title_lower for part in _name_parts(name))
+
+
+def _scrape_wikipedia(entity: Entity) -> ScrapeResult:
+    # For characters, only accept a dedicated article if it is actually about this
+    # character in this fandom — not a real person who happens to share the name.
+    if entity.entity_type == "character":
+        title = _wikipedia_search_character(entity.name, entity.fandom)
+    else:
+        title = _wikipedia_search(entity.name, fandom=entity.fandom)
+
+    if title:
+        result = _fetch_wikipedia_article(entity, title)
+        if result.success:
+            return result
+
+    if entity.entity_type == "character":
+        # Try a broader name search before resorting to the franchise page —
+        # catches real people (vloggers, athletes) whose fandom slug has no wiki.
+        broad_title = _wikipedia_search(entity.name)
+        if broad_title:
+            result = _fetch_wikipedia_article(entity, broad_title)
+            if result.success:
+                return result
+        return _scrape_wikipedia_franchise_page(entity)
+
+    return ScrapeResult(entity=entity, success=False, error=f"No Wikipedia article found for '{entity.name}'")
+
+
+def _fetch_wikipedia_article(entity: Entity, title: str) -> ScrapeResult:
     summary_url = WIKIPEDIA_SUMMARY_URL.format(title=quote(title, safe=""))
     resp = _get(summary_url)
     if resp is None:
@@ -213,45 +563,103 @@ def _scrape_wikipedia(entity: Entity) -> ScrapeResult:
     entity.source_url  = page_url or f"https://en.wikipedia.org/wiki/{quote(title, safe='')}"
     entity.source_type = "wikipedia"
     entity.description = description[:500]
-
     return ScrapeResult(entity=entity, attributes=attributes, success=True)
 
 
+def _scrape_wikipedia_franchise_page(entity: Entity) -> ScrapeResult:
+    """
+    No dedicated Wikipedia article for this character. Find the franchise/show page
+    and extract every paragraph that mentions the character by name.
+    """
+    franchise_title = _wikipedia_search(entity.fandom)
+    if not franchise_title:
+        return ScrapeResult(entity=entity, success=False,
+                            error=f"No Wikipedia page found for '{entity.name}' or '{entity.fandom}'")
+
+    page_resp = _get(f"https://en.wikipedia.org/wiki/{quote(franchise_title, safe='')}")
+    if not page_resp:
+        return ScrapeResult(entity=entity, success=False, error="Could not fetch franchise Wikipedia page")
+
+    soup = BeautifulSoup(page_resp.text, "lxml")
+    content = soup.find("div", id="mw-content-text")
+    if not content:
+        return ScrapeResult(entity=entity, success=False, error="Could not parse franchise Wikipedia page")
+
+    search_parts = [p.lower() for p in _name_parts(entity.name)]
+    mentions: list[str] = []
+    for tag in content.find_all(["p", "li"]):
+        text = _clean_text(tag.get_text(separator=" "))
+        text_lower = text.lower()
+        if any(part in text_lower for part in search_parts) and len(text) > 40:
+            mentions.append(text)
+
+    if not mentions:
+        return ScrapeResult(entity=entity, success=False,
+                            error=f"No mention of '{entity.name}' found in the '{franchise_title}' Wikipedia article")
+
+    page_url = f"https://en.wikipedia.org/wiki/{quote(franchise_title, safe='')}"
+    entity.source_url  = page_url
+    entity.source_type = "wikipedia"
+    entity.description = mentions[0][:500]
+
+    return ScrapeResult(entity=entity, success=True, attributes={
+        "description": mentions[0],
+        "backstory":   "\n\n".join(mentions),
+    })
+
+
+def _wiki_search(q: str) -> list[dict]:
+    resp = _get(
+        WIKIPEDIA_SEARCH_URL,
+        params={"action": "query", "list": "search", "srsearch": q,
+                "srlimit": 5, "format": "json", "utf8": 1},
+    )
+    if resp is None:
+        return []
+    try:
+        return resp.json()["query"]["search"]
+    except (KeyError, IndexError):
+        return []
+
+
 def _wikipedia_search(query: str, fandom: str = "") -> Optional[str]:
-    def _search(q: str) -> list[dict]:
-        resp = _get(
-            WIKIPEDIA_SEARCH_URL,
-            params={
-                "action": "query",
-                "list": "search",
-                "srsearch": q,
-                "srlimit": 5,
-                "format": "json",
-                "utf8": 1,
-            },
-        )
-        if resp is None:
-            return []
-        try:
-            return resp.json()["query"]["search"]
-        except (KeyError, IndexError):
-            return []
-
-    name_lower = query.lower()
-
     if fandom:
-        hits = _search(f"{query} {fandom} character")
+        hits = _wiki_search(f"{query} {fandom} character")
         for h in hits:
-            if name_lower in h["title"].lower():
+            if _title_matches_name(h["title"], query):
                 return h["title"]
 
-    hits = _search(query)
+    hits = _wiki_search(query)
     if not hits:
         return None
     for h in hits:
-        if name_lower in h["title"].lower():
+        if _title_matches_name(h["title"], query):
             return h["title"]
     return hits[0]["title"]
+
+
+def _wikipedia_search_character(name: str, fandom: str) -> Optional[str]:
+    """
+    Like _wikipedia_search but only returns a title when the article is clearly
+    about this character in this fandom — not a real person who shares the name.
+    Checks that the fandom appears in the search result snippet.
+    """
+    fandom_lower = fandom.lower()
+
+    # Fandom-qualified search first
+    hits = _wiki_search(f"{name} {fandom} character")
+    for h in hits:
+        if _title_matches_name(h["title"], name):
+            return h["title"]
+
+    # Plain name search — only accept if the snippet mentions the fandom
+    hits = _wiki_search(name)
+    for h in hits:
+        if _title_matches_name(h["title"], name):
+            if fandom_lower in h.get("snippet", "").lower():
+                return h["title"]
+
+    return None
 
 
 def _parse_wikipedia_html(html: str) -> dict:
@@ -363,4 +771,5 @@ def _fandom_slug(fandom: str) -> str:
         "bartimaeus trilogy":        "bartimaeus",
     }
     slug = fandom.lower().strip()
-    return aliases.get(slug, slug.replace(" ", ""))
+    # Strip all non-alphanumeric chars so "Mr. Robot" → "mrrobot", not "mr.robot"
+    return aliases.get(slug, re.sub(r"[^a-z0-9]", "", slug))

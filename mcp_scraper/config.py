@@ -19,12 +19,17 @@ REQUEST_DELAY_SECONDS = 1.5
 HTTP_TIMEOUT_SECONDS = 15
 MAX_RAW_TEXT_CHARS = 50_000
 
-# "fandom" tried first — better for fictional characters; "wikipedia" as fallback
-SOURCE_PRIORITY = ["fandom", "wikipedia"]
+# Source order: Fandom for fictional characters → AniList/Jikan for anime →
+# Wikidata (bridges to exact Wikipedia article) → Wikipedia direct.
+SOURCE_PRIORITY = ["fandom", "anilist", "jikan", "wikidata", "wikipedia", "wattpad"]
 
-FANDOM_SEARCH_URL = "https://{fandom}.fandom.com/wiki/{character}"
-FANDOM_SEARCH_API = "https://{fandom}.fandom.com/api/v1/Search/List?query={query}&limit=5"
+FANDOM_BASE_URL       = "https://{fandom}.fandom.com"
+FANDOM_MEDIAWIKI_API  = "https://{fandom}.fandom.com/api.php"
 WIKIPEDIA_SUMMARY_URL = "https://en.wikipedia.org/api/rest_v1/page/summary/{title}"
 WIKIPEDIA_SEARCH_URL  = "https://en.wikipedia.org/w/api.php"
+ANILIST_API_URL       = "https://graphql.anilist.co"
+JIKAN_API_URL         = "https://api.jikan.moe/v4"
+WIKIDATA_API_URL      = "https://www.wikidata.org/w/api.php"
+WATTPAD_API_URL       = "https://www.wattpad.com/api/v3/stories"
 
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")

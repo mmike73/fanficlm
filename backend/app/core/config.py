@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     LM_STUDIO_BASE_URL: str
     LM_STUDIO_MODEL: str
     TEMPERATURE: float = 0.7
+    MAX_TOKENS: int = 2048
     TIMEOUT: int = 120
 
     model_config = SettingsConfigDict(
