@@ -219,3 +219,79 @@ fanficlm/
         ├── main.jsx
         └── index.css
 ```
+
+
+Run RAG branch:
+- pip install -r requirements.txt   (instaleaza dependentele noi din requirements.txt)
+- python scripts/ingest_charactercodex.py (rulati script din codul adaugat pt generat folder vector store)
+- fisierul .env trebuie sa arate asa:
+```
+LM_STUDIO_BASE_URL=http://127.0.0.1:1234/v1
+LM_STUDIO_MODEL=google/gemma-3-4b  
+TEMPERATURE=0.7
+TIMEOUT=120
+EMBEDDING_MODEL=all-MiniLM-L6-v2
+VECTOR_STORE_PATH=../vector_store
+```
+
+NEW PROJECT STRUCTURE:
+```
+fanficlm/
+├── backend/
+│   ├── app/
+│   │   ├── api/v1/
+│   │   │   ├── endpoints/
+│   │   │   │   ├── chat.py          # chat endpoint, RAG injection
+│   │   │   │   ├── health.py
+│   │   │   │   └── theme.py
+│   │   │   └── router.py
+│   │   ├── core/
+│   │   │   ├── config.py            # settings, env vars
+│   │   │   └── logging.py
+│   │   ├── models/
+│   │   │   └── feedback.py
+│   │   ├── schemas/
+│   │   │   ├── chat.py
+│   │   │   ├── rag.py
+│   │   │   └── theme.py
+│   │   ├── services/
+│   │   │   ├── lm_studio_client.py  # LM Studio HTTP client
+│   │   │   ├── rag_service.py       # RAG logic (tier1 + tier2)
+│   │   │   └── theme_detector.py
+│   │   └── main.py
+│   ├── data/fine_tuning/datasets/   # fine-tuning datasets (gitignored)
+│   ├── prompts/                     # system prompt .txt files
+│   ├── scripts/
+│   │   └── ingest_charactercodex.py # builds vector_store/ (run once)
+│   ├── tests/
+│   ├── .env                         # local config (gitignored)
+│   ├── env.example
+│   └── requirements.txt
+│
+├── data/                            # dataset generation scripts
+│   ├── dataset/                     # generated .jsonl files
+│   ├── tier1_writingprompts.py
+│   ├── tier2_instruction_diversity.py
+│   └── merge_dataset.py
+│
+├── frontend/
+│   ├── src/
+│   │   ├── App.jsx
+│   │   ├── index.css
+│   │   └── themes.css
+│   └── index.html
+│
+├── mcp_scraper/                     
+│   ├── scraper.py
+│   ├── server.py
+│   ├── vector_store.py
+│   ├── database.py
+│   └── config.py
+│
+├── scraper_data/chroma_store/       # scraped wiki data (gitignored)
+├── vector_store/                    # CharacterCodex index (not in git, regenerate via ingest script)
+│   ├── charactercodex.tvim
+│   └── charactercodex_docs.json
+│
+└── README.md
+```
