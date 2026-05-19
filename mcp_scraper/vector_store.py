@@ -41,26 +41,51 @@ def _get_collection():
     return _collection
 
 
+_UPSERT_BATCH = 50
+
+
 def upsert_chunks(chunks: list[Chunk]) -> None:
     if not chunks:
         return
     collection = _get_collection()
-    collection.upsert(
-        ids=[c.chunk_id for c in chunks],
-        documents=[c.text for c in chunks],
-        metadatas=[c.to_metadata() for c in chunks],
-    )
+    for start in range(0, len(chunks), _UPSERT_BATCH):
+        batch = chunks[start:start + _UPSERT_BATCH]
+        collection.upsert(
+            ids=[c.chunk_id for c in batch],
+            documents=[c.text for c in batch],
+            metadatas=[c.to_metadata() for c in batch],
+        )
     logger.info(f"Upserted {len(chunks)} chunks into ChromaDB")
 
 
+def has_entity_chunks(entity_name: str, fandom: str) -> bool:
+    try:
+        col = _get_collection()
+        result = col.get(
+            where={"$and": [
+                {"entity_name": {"$eq": entity_name}},
+                {"fandom":      {"$eq": fandom}},
+            ]},
+            limit=1,
+            include=["metadatas"],
+        )
+        return len(result["ids"]) > 0
+    except Exception:
+        return False
+
+
 def delete_entity_chunks(entity_name: str, fandom: str) -> None:
-    collection = _get_collection()
-    collection.delete(
-        where={"$and": [
-            {"entity_name": {"$eq": entity_name}},
-            {"fandom": {"$eq": fandom}},
-        ]}
-    )
+    try:
+        collection = _get_collection()
+        collection.delete(
+            where={"$and": [
+                {"entity_name": {"$eq": entity_name}},
+                {"fandom":      {"$eq": fandom}},
+            ]}
+        )
+    except Exception as e:
+        # Benign when the entity has never been stored — don't block the upsert.
+        logger.debug(f"delete_entity_chunks no-op for '{entity_name}' ({fandom}): {e}")
 
 
 def search(

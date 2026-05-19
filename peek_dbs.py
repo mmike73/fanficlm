@@ -186,37 +186,46 @@ def peek_chroma():
         print("    (empty)")
         return
 
-    # Fetch up to 200 records (no query, just get)
-    peek_n = min(total, 200)
-    result = col.get(limit=peek_n, include=["documents", "metadatas"])
+    # Pass 1: metadata-only scan — no document text, so it handles any collection size.
+    # This gives us the full entity index without hitting a chunk-count cap.
+    all_meta  = col.get(include=["metadatas"])
+    all_ids   = all_meta["ids"]
+    all_metas = all_meta["metadatas"]
 
-    ids       = result["ids"]
-    docs      = result["documents"]
-    metas     = result["metadatas"]
-
-    # Aggregate by (entity_name, fandom)
-    groups: dict[tuple, list] = {}
-    for doc_id, doc, meta in zip(ids, docs, metas):
+    # Build group index: (entity_name, fandom) → {count, type_counts}
+    groups: dict[tuple, dict] = {}
+    for doc_id, meta in zip(all_ids, all_metas):
         key = (meta.get("entity_name", "?"), meta.get("fandom", "?"))
-        groups.setdefault(key, []).append((doc_id, doc, meta))
+        if key not in groups:
+            groups[key] = {"count": 0, "types": {}}
+        groups[key]["count"] += 1
+        t = meta.get("chunk_type", "?")
+        groups[key]["types"][t] = groups[key]["types"].get(t, 0) + 1
 
-    subheader(f"Breakdown by entity  ({len(groups)} entities, showing ≤5 chunks each)")
-    for (ename, fandom), chunks in sorted(groups.items()):
-        print(f"\n    [{ename}  /  {fandom}]  —  {len(chunks)} chunk(s)")
-        # Show chunk_type distribution
-        types: dict[str, int] = {}
-        for _, _, m in chunks:
-            t = m.get("chunk_type", "?")
-            types[t] = types.get(t, 0) + 1
-        type_str = "  ".join(f"{t}×{n}" for t, n in sorted(types.items()))
+    subheader(f"Breakdown by entity  ({len(groups)} entities, showing ≤3 chunks each)")
+    for (ename, fandom), info in sorted(groups.items()):
+        n = info["count"]
+        print(f"\n    [{ename}  /  {fandom}]  —  {n} chunk(s)")
+        type_str = "  ".join(f"{t}×{c}" for t, c in sorted(info["types"].items()))
         print(f"      types: {type_str}")
-        # Print first 5 chunks
-        for doc_id, doc, meta in chunks[:5]:
-            preview = trunc(doc, 70)
-            ctype   = meta.get("chunk_type", "?")
-            print(f"      [{ctype}]  {preview}")
-        if len(chunks) > 5:
-            print(f"      … and {len(chunks) - 5} more chunk(s)")
+
+        # Pass 2: targeted document fetch for this entity only
+        try:
+            sample = col.get(
+                where={"$and": [
+                    {"entity_name": {"$eq": ename}},
+                    {"fandom":      {"$eq": fandom}},
+                ]},
+                limit=3,
+                include=["documents", "metadatas"],
+            )
+            for doc, meta in zip(sample["documents"], sample["metadatas"]):
+                print(f"      [{meta.get('chunk_type', '?')}]  {trunc(doc, 70)}")
+        except Exception as exc:
+            print(f"      [!] Could not fetch samples: {exc}")
+
+        if n > 3:
+            print(f"      … and {n - 3} more chunk(s)")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
