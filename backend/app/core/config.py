@@ -6,6 +6,7 @@ PROMPTS_DIR = Path(__file__).resolve().parent.parent.parent / 'prompts'
 class Settings(BaseSettings):
     LM_STUDIO_BASE_URL: str
     LM_STUDIO_MODEL: str
+    LM_STUDIO_EMBEDDING_MODEL: str = "text-embedding-nomic-embed-text-v1.5"
     EMBEDDING_MODEL: str
     VECTOR_STORE_PATH: str = str(Path(__file__).resolve().parent.parent.parent.parent / "vector_store")
     TEMPERATURE: float = 0.7
