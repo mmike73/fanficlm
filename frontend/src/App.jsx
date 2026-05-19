@@ -103,6 +103,33 @@ const PARTICLE_CONFIG = {
   comedy:    { glyph: '☺', count: 16, direction: 'up',    sizeMin: 10, sizeMax: 22 },
 }
 
+const SAMPLE_PROMPTS = [
+  { 
+    id: 'love', 
+    icon: THEME_SYMBOLS.love, 
+    title: 'Love', 
+    text: 'Write a poetic letter to a star-crossed lover separated by time.' 
+  },
+  { 
+    id: 'horror', 
+    icon: THEME_SYMBOLS.horror, 
+    title: 'Horror', 
+    text: 'Describe an abandoned cabin where the shadows seem to move on their own.' 
+  },
+  { 
+    id: 'mystery', 
+    icon: THEME_SYMBOLS.mystery, 
+    title: 'Mystery', 
+    text: 'A detective finds a locked room with only a spilled cup of tea. What happened?' 
+  },
+  { 
+    id: 'adventure', 
+    icon: THEME_SYMBOLS.adventure, 
+    title: 'Adventure', 
+    text: 'Outline a quest for a young rogue seeking the lost crystal of the wind.' 
+  }
+]
+
 function Avatar({ role, symbol }) {
   return (
     <div className={`avatar ${role}`}>
@@ -340,6 +367,29 @@ export default function App() {
           <div className="empty-logo">{symbol}</div>
           <h1>How can I help you?</h1>
           <p>Start a conversation below</p>
+
+          <div className="prompt-cards">
+            {SAMPLE_PROMPTS.map(p => (
+              <button 
+                key={p.id} 
+                className="prompt-card"
+                onClick={() => {
+                  setInput(p.text)
+                  setTimeout(() => {
+                    adjustTextarea()
+                    textareaRef.current?.focus()
+                  }, 0)
+                }}
+              >
+                <span className="card-icon">{p.icon}</span>
+                <div className="card-content">
+                  <span className="card-title">{p.title}</span>
+                  <span className="card-text">{p.text}</span>
+                </div>
+              </button>
+            ))}
+          </div>
+
         </div>
       ) : (
         <div className="messages">

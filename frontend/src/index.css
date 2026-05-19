@@ -543,3 +543,75 @@ textarea::placeholder { color: var(--fg-dim); opacity: 0.6; }
 .mute-btn:active {
   transform: scale(0.9);
 }
+
+/* ── prompt cards ── */
+.prompt-cards {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  margin-top: 32px;
+  width: 100%;
+  max-width: 580px;
+  padding: 0 16px;
+}
+
+.prompt-card {
+  background: var(--input-bg);
+  border: 1px solid var(--input-br);
+  border-radius: 14px;
+  padding: 16px;
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease, transform 0.1s ease;
+  color: var(--fg);
+}
+
+.prompt-card:hover {
+  background: var(--user-bubble-bg);
+  border-color: var(--accent-1);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px var(--accent-glow);
+}
+
+.prompt-card:active {
+  transform: translateY(0);
+}
+
+.card-icon {
+  font-size: 18px;
+  color: var(--accent-1);
+  opacity: 0.9;
+  margin-top: 2px;
+  transition: color 0.5s ease;
+}
+
+.card-content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.card-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--fg);
+}
+
+.card-text {
+  font-size: 13px;
+  color: var(--fg-dim);
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+@media (max-width: 540px) {
+  .prompt-cards { 
+    grid-template-columns: 1fr; 
+  }
+}
