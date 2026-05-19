@@ -1,0 +1,13 @@
+{
+  "_comment": "Add this block to your LM Studio MCP servers config.",
+  "_comment2": "In LM Studio: Settings → Model Context Protocol → Add server → paste this config.",
+
+  "fanfic-knowledge-base": {
+    "command": "/Volumes/D/Faculta/A3S2/llms/fanficlm/.venv/bin/python",
+    "args": ["-m", "mcp_scraper.server"],
+    "cwd": "/Volumes/D/Faculta/A3S2/llms/fanficlm",
+    "env": {
+      "LOG_LEVEL": "INFO"
+    }
+  }
+}
