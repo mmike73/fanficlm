@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     EMBEDDING_MODEL: str
     VECTOR_STORE_PATH: str = str(Path(__file__).resolve().parent.parent.parent.parent / "vector_store")
     TEMPERATURE: float = 0.7
+    MAX_TOKENS: int = 2048
     TIMEOUT: int = 120
 
     model_config = SettingsConfigDict(
