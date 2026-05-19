@@ -281,7 +281,7 @@ fanficlm/
 │   │   └── themes.css
 │   └── index.html
 │
-├── mcp_scraper/                     # colleague's MCP scraper (added_mcp_server)
+├── mcp_scraper/                     
 │   ├── scraper.py
 │   ├── server.py
 │   ├── vector_store.py
