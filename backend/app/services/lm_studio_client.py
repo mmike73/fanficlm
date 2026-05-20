@@ -13,11 +13,20 @@ class LMClient:
         self.timeout = app_settings.TIMEOUT
         self.system_prompt = _load_system_prompt('system_default.txt')
 
-    async def chat_completion(self, messages: list[dict]) -> str:
+    async def chat_completion(
+        self,
+        messages: list[dict],
+        rag_context: str = "",
+    ) -> str:
+        system = self.system_prompt
+        if rag_context:
+            system = f"{system}\n\n{rag_context}"
+
         payload = {
-            "model": self.model,
-            "messages": [{"role": "system", "content": self.system_prompt}, *messages],
+            "model":       self.model,
+            "messages":    [{"role": "system", "content": system}, *messages],
             "temperature": self.temperature,
+            "max_tokens": app_settings.MAX_TOKENS,
         }
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             response = await client.post(
@@ -26,4 +35,13 @@ class LMClient:
             )
             response.raise_for_status()
             data = response.json()
-            return data["choices"][0]["message"]["content"]
+            choice = data["choices"][0]
+            content = choice["message"]["content"]
+            if not content or not content.strip():
+                finish_reason = choice.get("finish_reason", "unknown")
+                raise ValueError(
+                    f"Model returned an empty response "
+                    f"(finish_reason={finish_reason!r}). "
+                    "Check that LM Studio has the model loaded and MAX_TOKENS is set."
+                )
+            return content

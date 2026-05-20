@@ -57,7 +57,7 @@ class ThemeDetector:
 
     def __init__(self) -> None:
         self.base_url = app_settings.LM_STUDIO_BASE_URL
-        self.model = app_settings.EMBEDDING_MODEL
+        self.model = app_settings.LM_STUDIO_EMBEDDING_MODEL
         self.timeout = app_settings.TIMEOUT
         self.labels = list(THEME_DESCRIPTIONS.keys())
         self.descriptions = [THEME_DESCRIPTIONS[lbl] for lbl in self.labels]

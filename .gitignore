@@ -1,3 +1,18 @@
+# ── Project-specific ──────────────────────────────────────────────────────
+# Scraped data — SQLite DB and ChromaDB binaries are too large and ephemeral
+scraper_data/
+
+# Fine-tuning logs and checkpoints
+backend/data/
+
+# macOS metadata
+.DS_Store
+
+# Vim/editor swap files
+*.swp
+*.swo
+
+# ── Python standard ────────────────────────────────────────────────────────
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
