@@ -25,14 +25,18 @@ from app.core.config import app_settings
 # descriptive phrase than against a bare label, because the embedding
 # space encodes meaning, not lexical identity.
 THEME_DESCRIPTIONS: dict[str, str] = {
-    "love":    "A romantic story about love, affection, attraction and relationships.",
-    "sadness": "A sad, melancholic, sorrowful story about grief, loss or heartbreak.",
-    "anime":   "An anime-inspired story with Japanese pop culture, manga tropes and characters.",
-    "history": "A historical story set in the past, featuring real historical events or eras.",
-    "war":     "A war story about soldiers, battles, military conflict and the front line.",
-    "cozy":    "A cozy, warm, comforting slice-of-life story with tea, blankets and quiet moments.",
-    "royal":   "A royal story about kings, queens, princes, princesses, palaces and court intrigue.",
-    "mafia":   "A mafia story about crime families, gangsters, organized crime and the underworld.",
+    "love":      "A romantic story about love, affection, attraction and relationships.",
+    "sadness":   "A sad, melancholic, sorrowful story about grief, loss or heartbreak.",
+    "anime":     "An anime-inspired story with Japanese pop culture, manga tropes and characters.",
+    "history":   "A historical story set in the past, featuring real historical events or eras.",
+    "war":       "A war story about soldiers, battles, military conflict and the front line.",
+    "cozy":      "A cozy, warm, comforting slice-of-life story with tea, blankets and quiet moments.",
+    "royal":     "A royal story about kings, queens, princes, princesses, palaces and court intrigue.",
+    "mafia":     "A mafia story about crime families, gangsters, organized crime and the underworld.",
+    "horror":    "A horror story about fear, dread, monsters, ghosts and the supernatural.",
+    "mystery":   "A mystery story about detectives, clues, suspense and solving a crime or puzzle.",
+    "adventure": "An adventure story about quests, exploration, journeys and daring danger.",
+    "comedy":    "A funny, lighthearted, humorous and absurd comedy story full of jokes.",
 }
 
 DEFAULT_THEME = "cozy"  # Neutral fallback when nothing scores well.
@@ -57,8 +61,6 @@ class ThemeDetector:
         self.timeout = app_settings.TIMEOUT
         self.labels = list(THEME_DESCRIPTIONS.keys())
         self.descriptions = [THEME_DESCRIPTIONS[lbl] for lbl in self.labels]
-        # Cache the label embeddings — they never change at runtime, so
-        # we only pay the embedding cost once per server start.
         self._label_vectors: list[list[float]] | None = None
 
     async def _embed(self, client: httpx.AsyncClient, texts: list[str]) -> list[list[float]]:
@@ -70,7 +72,6 @@ class ThemeDetector:
         )
         response.raise_for_status()
         data = response.json()
-        # OpenAI-compatible response: { "data": [ { "embedding": [...] }, ... ] }
         return [item["embedding"] for item in data["data"]]
 
     async def _ensure_label_vectors(self, client: httpx.AsyncClient) -> list[list[float]]:
